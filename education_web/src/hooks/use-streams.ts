@@ -218,6 +218,7 @@ export default function useStream () {
       }
 
       if (type === 'audio') {
+        console.log("audio roomstore#mute/unmute, ", audio, targetUid)
         if (audio) {
           await roomStore.mute(targetUid, 'audio');
         } else {

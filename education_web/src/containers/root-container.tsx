@@ -108,25 +108,21 @@ export const RootProvider: React.FC<any> = ({children}) => {
     rtmClient.on("MessageFromPeer", ({ message: { text }, peerId, props }: { message: { text: string }, peerId: string, props: any }) => {
       const body = resolvePeerMessage(text);
       resolveMessage(peerId, body);
-      roomStore.handlePeerMessage(body.cmd, peerId)
+      roomStore
+      .handlePeerMessage(body.cmd, peerId)
       .then(() => {
       }).catch(console.warn);
     });
     rtmClient.on("AttributesUpdated", (attributes: object) => {
       console.log('[rtm-client] updated origin attributes', attributes);
-      roomStore.updateRoomAttrs(attributes)
+      roomStore.updateRoomAttrsBy(attributes)
     });
     rtmClient.on("MemberJoined", (memberId: string) => {
     });
     rtmClient.on("MemberLeft", (memberId: string) => {
-      if (roomStore.state.applyUid === +memberId) {
-        roomStore.updateCourseLinkUid(0)
-        .then(() => {
-          globalStore.removeNotice();
-        }).catch(console.warn);
-      }
     });
     rtmClient.on("MemberCountUpdated", (count: number) => {
+      console.log("[agora-web] member count updated", count)
       !ref.current && roomStore.updateMemberCount(count);
     });
     rtmClient.on("ChannelMessage", ({ memberId, message }: { message: { text: string }, memberId: string }) => {

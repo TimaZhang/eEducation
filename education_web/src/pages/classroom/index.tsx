@@ -140,8 +140,11 @@ export function RoomPage({ children }: any) {
     if (platform === 'web') {
       const webClient = rtcClient as AgoraWebClient;
       if (!webClient.published) return;
-      webClient
-        .unpublishLocalStream()
+      Promise.all([
+        webClient
+        .unpublishLocalStream(),
+        roomStore.deleteKey(+me.uid)
+      ])
         .then(() => {
           console.log("[agora-web] unpublish local stream");
         }).catch(console.warn)
@@ -151,6 +154,8 @@ export function RoomPage({ children }: any) {
       const nativeClient = rtcClient as AgoraElectronClient;
       if (!nativeClient.published) return;
       nativeClient.unpublish();
+      roomStore.deleteKey(+me.uid).then(() => {
+      }).catch(console.warn)
     }
 
   }, [me.role, location.pathname, course.linkId]);
@@ -177,14 +182,18 @@ export function RoomPage({ children }: any) {
       console.log("canPb>>> ", canPublish, roomStore.state.course.linkId, roomStore.state.me.uid);
       if (canPublish && !publishLock.current) {
         publishLock.current = true;
-        webClient
+        Promise.all([
+          roomStore.updateMe({broad: true}),
+          webClient
           .publishLocalStream(streamSpec)
-          .then(() => {
-            console.log("[agora-web] publish local stream");
-          }).catch(console.warn)
-          .finally(() => {
-            publishLock.current = false;
-          })
+        ])
+        .then((res: any[]) => {
+          console.log("[agora-web] any: ", res[0], res[1]);
+          console.log("[agora-web] publish local stream");
+        }).catch(console.warn)
+        .finally(() => {
+          publishLock.current = false;
+        })
       }
     }
 
@@ -192,8 +201,14 @@ export function RoomPage({ children }: any) {
       const nativeClient = roomStore.rtcClient as AgoraElectronClient;
       if (canPublish && !publishLock.current) {
         publishLock.current = true;
-        nativeClient.publish();
-        publishLock.current = false;
+        roomStore.updateMe({broad: true})
+          .then(() => {
+            console.log("broad updateMe")
+            nativeClient.publish();
+          }).catch(console.warn)
+          .finally(() => {
+            publishLock.current = false;
+          })
       }
     }
   }, [
@@ -201,7 +216,7 @@ export function RoomPage({ children }: any) {
     uid,
     role,
     mediaDevice,
-    canPublish
+    canPublish,
   ]);
 
   useEffect(() => {
@@ -210,6 +225,7 @@ export function RoomPage({ children }: any) {
       if (platform === 'web') {
         const webClient = roomStore.rtcClient as AgoraWebClient;
         if (webClient.joined || rtc.current) {
+          console.log("joined, ", webClient.joined)
           return;
         }
         console.log("[agora-rtc] add event listener");
@@ -257,13 +273,13 @@ export function RoomPage({ children }: any) {
         webClient.rtc.on('stream-removed', ({ stream }: any) => {
           console.log("[agora-web] removed remote stream, id: ", stream.getId(), roomStore.applyUid);
           const id = stream.getId();
-          if (id === roomStore.applyUid) {
-            globalStore.removeNotice();
-            me.role === 'teacher' &&
-            roomStore.updateCourseLinkUid(0).then(() => {
-              console.log("update teacher link_uid to 0");
-            }).catch(console.warn);
-          }
+          // if (id === roomStore.applyUid) {
+          //   globalStore.removeNotice();
+          //   me.role === 'teacher' &&
+          //   roomStore.updateCourseLinkUid(0).then(() => {
+          //     console.log("update teacher link_uid to 0");
+          //   }).catch(console.warn);
+          // }
           roomStore.removeRemoteStream(stream.getId());
         });
         webClient.rtc.on('peer-online', ({uid}: any) => {
