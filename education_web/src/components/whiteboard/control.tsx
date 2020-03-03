@@ -44,7 +44,7 @@ interface ControlProps {
   current: string
   currentPage: number
   totalPage: number
-  role: string
+  role: number
   notice?: NoticeProps
   onClick: (evt: any, type: string) => void
 }
@@ -94,11 +94,10 @@ export default function Control({
         if (whiteboard.state.endTime 
           && whiteboard.state.startTime) {
           const {endTime, startTime, roomUUID} = whiteboard.clearRecording();
-          await roomStore.rtmClient.sendChannelMessage(JSON.stringify({
-            account: me.account,
-            url: getOSSUrl(mediaUrl),
-            link: `/replay/${roomUUID}/${startTime}/${endTime}/${mediaUrl}`
-          }));
+          // await roomStore.rtmClient.sendChannelMessage({
+          //   account: me.account,
+          //   recordId: 'fakerecordId',
+          // })
           const message = {
             account: me.account,
             id: me.uid,
@@ -136,7 +135,7 @@ export default function Control({
         : null}
       </div>
       <div className="controls">
-        {!sharing && role === 'teacher' ?
+        {!sharing && role === 1 ?
           <>
             <ControlItem name={`first_page`}
               active={'first_page' === current}
@@ -156,7 +155,7 @@ export default function Control({
             <div className="menu-split" style={{ marginLeft: '7px', marginRight: '7px' }}></div>
           </> : null
         }
-        {role === 'teacher' ?
+        {role === 1 ?
           <>
             <ControlItem
               name={whiteboard.state.recording ? 'stop_recording' : 'recording'}
@@ -170,7 +169,7 @@ export default function Control({
               text={sharing ? 'stop sharing' : ''}
             />
           </> : null }
-        {role === 'student' ?
+        {+role === 2 ?
           <>
             <ControlItem
               name={isHost ? 'hands_up_end' : 'hands_up'}

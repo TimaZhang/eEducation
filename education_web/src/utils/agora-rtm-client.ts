@@ -19,25 +19,67 @@ export enum RoomMessage {
   muteChat = 109,
   unmuteChat = 110,
   muteBoard = 200,
-  unmuteBoard = 201
+  unmuteBoard = 201,
+  lockBoard = 301,
+  unlockBoard = 302,
+  startCourse = 401,
+  endCourse = 402,
+  muteAllChat = 501,
+  unmuteAllChat = 502
 }
 
-export interface ChatBody {
+export enum ChatCmdType {
+  chat = 1,
+  update = 2,
+  replay = 3,
+  course = 4
+}
+
+export interface ChannelBodyParams {
   account: string
   content: string
+  recordId: string
 }
 
-export interface EntityBody {
+export interface NotifyMessageParams {
+  cmd: ChatCmdType
+  data: ChatMessage | UserMessage | CourseMessage
+  enableHistoricalMessaging: boolean
+}
+
+export interface CourseMessage {
+  operate: 
+    RoomMessage.startCourse | 
+    RoomMessage.endCourse | 
+    RoomMessage.muteAllChat |
+    RoomMessage.unmuteAllChat |
+    RoomMessage.lockBoard |
+    RoomMessage.unlockBoard
+}
+
+export interface ChatMessage {
+  account: string
+  content: string
+  recordId?: string
+}
+
+export interface UserMessage {
   uid: string
   account: string
   resource: string
   value: number
 }
 
+
+export interface ChatBody {
+  account: string
+  content: string
+}
+
 export interface MessageBody {
   cmd: RoomMessage
   text?: string
-  data?: ChatBody | EntityBody
+  data?: ChatMessage | UserMessage | CourseMessage
 }
 
 export type SessionProps = {
@@ -167,8 +209,37 @@ export default class AgoraRTMClient {
     }
   }
 
-  async sendChannelMessage(body: string) {
-    return this._currentChannel.sendMessage({ text: body }, {enableHistoricalMessaging: true});
+  async notifyMessage(params: NotifyMessageParams) {
+    const {cmd, data, enableHistoricalMessaging = false} = params
+
+    const body = JSON.stringify({
+      cmd,
+      data,
+    })
+
+    return this._currentChannel.sendMessage({text: body}, {enableHistoricalMessaging})
+  }
+
+  async sendPeerMessage(peerId: string, body: MessageBody) {
+    resolveMessage(peerId, body);
+    console.log("[rtm-client] send peer message ", peerId, JSON.stringify(body));
+    let result = await this._client.sendMessageToPeer({text: JSON.stringify(body)}, peerId, {enableHistoricalMessaging: true});
+    return result.hasPeerReceived;
+  }
+
+  async sendChannelMessage(data: Partial<ChannelBodyParams>) {
+
+    const msgData: ChatMessage = {
+      account: data.account as string,
+      content: data.content as string,
+      recordId: data.recordId as string
+    }
+
+    return this.notifyMessage({
+      cmd: ChatCmdType.chat,
+      data: msgData,
+      enableHistoricalMessaging: true
+    })
   }
 
   async updateChannelAttrsByKey (key: string, attrs: any) {
@@ -258,12 +329,5 @@ export default class AgoraRTMClient {
       }
     }
     return accounts;
-  }
-
-  async sendPeerMessage(peerId: string, body: MessageBody) {
-    resolveMessage(peerId, body);
-    console.log("[rtm-client] send peer message ", peerId, JSON.stringify(body));
-    let result = await this._client.sendMessageToPeer({text: JSON.stringify(body)}, peerId, {enableHistoricalMessaging: true});
-    return result.hasPeerReceived;
   }
 }

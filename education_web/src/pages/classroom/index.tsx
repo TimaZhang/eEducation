@@ -26,62 +26,39 @@ export function RoomPage({ children }: any) {
   const lock = useRef<boolean>(false);
 
   useEffect(() => {
-
     const me = roomStore.state.me;
-    const {
-      rid,
-      roomType,
-      roomName,
-      lockBoard,
-      linkId,
-    } = roomStore.state.course;
+    const course = roomStore.state.course;
 
-    const {rtmToken, rtcToken} = roomStore.state;
-
-    if (!rid || !me.uid) {
+    if (!me.account || !course.roomName) {
       history.push('/');
     }
 
-    const uid = me.uid;
-
-    const payload = {
-      // course state
-      rid,
-      roomName,
-      roomType,
-      lockBoard,
-      rtmToken,
-      rtcToken,
-      // TODO
-      linkId: linkId,
-      // agora user attributes
-      uid,
+    const sessionInfo = {
+      userName: me.account,
+      roomName: course.roomName,
       role: me.role,
-      video: me.video,
-      audio: me.audio,
-      chat: me.chat,
-      account: me.account,
-      boardId: me.boardId,
-      sharedId: me.sharedId,
-      grantBoard: me.grantBoard,
+      type: course.roomType
     }
     lock.current = true;
     if (roomStore.state.rtm.joined) return;
     globalStore.showLoading();
-    roomStore.loginAndJoin(payload, true).then(() => {
-      console.log('[biz-login]  loginAndJoin, success: ', JSON.stringify(payload));
+    roomStore.LoginToRoom(sessionInfo, true).then(() => {
     }).catch((err: any) => {
-      globalStore.showToast({
-        type: 'rtmClient',
-        message: t('toast.login_failure'),
-      });
-      history.push('/');
+      if (err.reason) {
+        globalStore.showToast({
+          type: 'rtmClient',
+          message: t('toast.rtm_login_failed_reason', {reason: err.reason}),
+        })
+      } else {
+        globalStore.showToast({
+          type: 'rtmClient',
+          message: t('toast.rtm_login_failed'),
+        })
+      }
       console.warn(err)
+    }).finally(() => {
+      globalStore.stopLoading()
     })
-    .finally(() => {
-      globalStore.stopLoading();
-      lock.current = false;
-    });
   }, []);
 
   const roomType = roomTypes[roomStore.state.course.roomType];
@@ -112,9 +89,9 @@ export function RoomPage({ children }: any) {
   const canPublish = useMemo(() => {
     return !isBigClass ||
       (isBigClass && 
-        (me.role === 'teacher' ||
-          +me.uid === +course.linkId));
-  }, [me.uid, course.linkId, me.role, isBigClass]);
+        (me.role === 1 ||
+          me.coVideo));
+  }, [me.uid, me.coVideo, me.role, isBigClass]);
 
   useEffect(() => {
     return () => {
@@ -134,8 +111,8 @@ export function RoomPage({ children }: any) {
   }, [roomState]);
 
   useEffect(() => {
-    if (!location.pathname.match(/big-class/) || me.role === 'teacher') return
-    if (course.linkId) return;
+    if (!location.pathname.match(/big-class/) || me.role === 1) return
+    // if (course.linkId) return;
     const rtcClient = roomStore.rtcClient;
     if (platform === 'web') {
       const webClient = rtcClient as AgoraWebClient;
@@ -158,7 +135,7 @@ export function RoomPage({ children }: any) {
       }).catch(console.warn)
     }
 
-  }, [me.role, location.pathname, course.linkId]);
+  }, [me.role, location.pathname, canPublish]);
 
   useEffect(() => {
     if (!rtcJoined || rtc.current) return;
@@ -179,11 +156,11 @@ export function RoomPage({ children }: any) {
           deviceId: mediaDevice.speakerId
         }
       }
-      console.log("canPb>>> ", canPublish, roomStore.state.course.linkId, roomStore.state.me.uid);
+      console.log("canPb>>> ", canPublish, roomStore.state.me.uid);
       if (canPublish && !publishLock.current) {
         publishLock.current = true;
         Promise.all([
-          roomStore.updateMe({broad: true}),
+          // roomStore.updateLocal({broad: true}),
           webClient
           .publishLocalStream(streamSpec)
         ])
@@ -201,9 +178,9 @@ export function RoomPage({ children }: any) {
       const nativeClient = roomStore.rtcClient as AgoraElectronClient;
       if (canPublish && !publishLock.current) {
         publishLock.current = true;
-        roomStore.updateMe({broad: true})
+        roomStore.updateLocalMe({broad: true})
           .then(() => {
-            console.log("broad updateMe")
+            console.log("broad updateLocal")
             nativeClient.publish();
           }).catch(console.warn)
           .finally(() => {
@@ -220,7 +197,7 @@ export function RoomPage({ children }: any) {
   ]);
 
   useEffect(() => {
-    if (!roomState.me.uid || !roomState.course.rid) return;
+    if (!roomState.me.uid || !roomState.course.rid ||!roomState.appID) return;
     if (classroom) {
       if (platform === 'web') {
         const webClient = roomStore.rtcClient as AgoraWebClient;
@@ -290,7 +267,7 @@ export function RoomPage({ children }: any) {
           console.log("[agora-web] peer-leave, id: ", uid, roomStore.applyUid);
           if (uid === roomStore.applyUid) {
             globalStore.removeNotice();
-            me.role === 'teacher' &&
+            me.role === 1 &&
             roomStore.updateCourseLinkUid(0).then(() => {
               console.log("update teacher link_uid to 0");
             }).catch(console.warn);
@@ -309,7 +286,8 @@ export function RoomPage({ children }: any) {
             uid: +roomState.me.uid, 
             channel: roomState.course.rid,
             token: '',
-            dual: isSmallClass
+            dual: isSmallClass,
+            appId: roomState.appID,
           }).then(() => {
             
           }).catch(console.warn).finally(() => {
@@ -384,7 +362,7 @@ export function RoomPage({ children }: any) {
         nativeClient.on('removestream', ({ uid }: any) => {
           if (uid === roomStore.applyUid) {
             globalStore.removeNotice();
-            me.role === 'teacher' &&
+            me.role === 1 &&
             roomStore.updateCourseLinkUid(0).then(() => {
               console.log("update teacher link_uid to 0");
             }).catch(console.warn);
@@ -417,7 +395,7 @@ export function RoomPage({ children }: any) {
         }
       }
     }
-  }, [JSON.stringify([roomState.me.uid, roomState.course.rid])]);
+  }, [JSON.stringify([roomState.me.uid, roomState.course.rid, roomState.appID])]);
 
   return (
     <div className={`classroom ${roomType.path}`}>

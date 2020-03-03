@@ -1,11 +1,14 @@
-const FETCH_TIMEOUT = 5000
+const FETCH_TIMEOUT = 10000
 
 const delay = 100;
 
 export async function AgoraFetch (input: RequestInfo, init?: RequestInit, retryCount: number = 3): Promise<any> {
   return new Promise((resolve, reject) => {
-    const onSuccess = (response: Response) => {
-      resolve(response);
+    const onResponse = (response: Response) => {
+      if (!response.ok) {
+        reject(new Error(response.statusText))
+      }
+      return response.json().then(resolve).catch(reject)
     }
 
     const onError = (error: any) => {
@@ -18,12 +21,13 @@ export async function AgoraFetch (input: RequestInfo, init?: RequestInit, retryC
     }
 
     const rescueError = (error: any) => {
+      console.warn(error)
       throw error;
     }
 
     function fetchRequest() {
       return fetch(input, init)
-        .then(onSuccess)
+        .then(onResponse)
         .catch(onError)
         .catch(rescueError)
     }

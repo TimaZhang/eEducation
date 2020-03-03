@@ -357,16 +357,18 @@ export default class AgoraWebClient {
 
 
   async joinChannel({
-    uid, channel, dual, token
+    uid, channel, dual, token, appId
   }: {
     uid: number,
     channel: string,
     dual: boolean,
-    token: string
+    token: string,
+    appId: string
   }) {
-    this.localUid = uid;
+    this.localUid = +uid;
     this.channel = channel;
-    await this.rtc.createClient(APP_ID, true);
+    console.log("channel", channel, "dual", dual, this.localUid, appId)
+    await this.rtc.createClient(appId, true);
     await this.rtc.join(this.localUid, channel, token);
     dual && await this.rtc.enableDualStream();
     this.joined = true;

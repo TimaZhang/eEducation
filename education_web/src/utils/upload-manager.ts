@@ -204,14 +204,18 @@ export class UploadManager {
         });
       }
       await Promise.all(tasks.map(task => this.handleUploadTask(task, onProgress)));
-      this.room.setMemberState({
-        currentApplianceName: "selector",
-      });
+      if (this.room.isWritable) {
+        this.room.setMemberState({
+          currentApplianceName: "selector",
+        });
+      }
     }
   }
   private async handleUploadTask(task: TaskType, onProgress?: PPTProgressListener): Promise<void> {
     const fileUrl: string = await this.addFile(`${task.uuid}${task.imageFile.file.name}`, task.imageFile.file, onProgress);
-    this.room.completeImageUpload(task.uuid, fileUrl);
+    if (this.room.isWritable) {
+      this.room.completeImageUpload(task.uuid, fileUrl);
+    }
   }
 
   private getFile = (name: string): string => {

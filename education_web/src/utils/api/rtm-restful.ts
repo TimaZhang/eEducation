@@ -55,7 +55,8 @@ export class RTMRestful {
         Authorization: this.basicAuthorization(),
       },
     });
-    const json = await response.json();
+    // const json = await response.json();
+    const json = response;
     const count = get(json, 'count');
     this.totalCount = count;
     this.offset = 0;
@@ -84,7 +85,8 @@ export class RTMRestful {
           order: "asc"
         })
     });
-    const jsonA = await responseA.json();
+    const jsonA = responseA;
+    // const jsonA = await responseA.json();
     const location = get(jsonA, 'location');
     if (isEmpty(location)) {
       throw `location from agora rtm endpoint must be present`
@@ -96,7 +98,8 @@ export class RTMRestful {
         Authorization: this.basicAuthorization(),
       },
     });
-    const jsonB = await respB.json();
+    // const jsonB = await respB.json();
+    const jsonB = respB;
     const messages = get(jsonB, 'messages');
     return messages;
   }

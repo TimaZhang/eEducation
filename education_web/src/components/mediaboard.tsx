@@ -185,10 +185,13 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
     }
   }
 
-  const isHost = useMemo(() => {
-    return +roomStore.state.me.uid === +roomStore.state.course.linkId;
-  }, [roomStore.state.me.uid,
-    roomStore.state.course.linkId]);
+  const isHost = false
+
+  // TODO: need deprecate
+  // const isHost = useMemo(() => {
+  //   return +roomStore.state.me.uid === +roomStore.state.course.linkId;
+  // }, [roomStore.state.me.uid,
+  //   roomStore.state.course.linkId]);
   
   const location = useLocation();
 
@@ -212,13 +215,16 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
     const newIndex = room.state.sceneState.index + 1;
     const scenePath = room.state.sceneState.scenePath;
     const currentPath = `/${pathName(scenePath)}`;
-    room.putScenes(currentPath, [{}], newIndex);
-    room.setSceneIndex(newIndex);
+    if (room.isWritable) {
+      room.putScenes(currentPath, [{}], newIndex);
+      room.setSceneIndex(newIndex);
+    }
+
     whiteboard.updateRoomState();
   }
 
   const changePage = (idx: number, force?: boolean) => {
-    if (ref.current || !current || !room) return;
+    if (ref.current || !current || !room || !room.isWritable) return;
     const _idx = idx -1;
     if (_idx < 0 || _idx >= current.totalPage) return;
     if (force) {
@@ -242,9 +248,9 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
   }
 
   const showControl: boolean = useMemo(() => {
-    if (me.role === 'teacher') return true;
+    if (me.role == 1) return true;
     if (location.pathname.match(/big-class/)) {
-      if (me.role === 'student') {
+      if (me.role == 2) {
         return true;
       }
     }
@@ -286,7 +292,7 @@ const items = [
 
   const toolItems = useMemo(() => {
     return items.filter((item: any) => {
-      if (role === 'teacher') return item;
+      if (+role === 1) return item;
       if (['add', 'folder', 'upload'].indexOf(item.name) === -1) {
         if (item.name === 'hand_tool') {
           if (course.lockBoard) {
@@ -302,11 +308,10 @@ const items = [
 
   const drawable: string = useMemo(() => {
     if (location.pathname.match('small-class|big-class')) {
-      if (me.role === 'teacher') {
+      if (+me.role === 1) {
         return 'drawable';
       }
-      if (me.role === 'student') {
-        console.log("agora pathname: >>>>>>> ", location.pathname, me.grantBoard, me.role, Boolean(me.grantBoard));
+      if (+me.role === 2) {
         if (Boolean(me.grantBoard)) {
           return 'drawable';
         } else {
@@ -322,7 +327,7 @@ const items = [
   const [selector, updateSelector] = useState<string>('');
 
   const handleToolClick = (evt: any, name: string) => {
-    if (!room) return;
+    if (!room || !room.isWritable) return;
     if (['upload', 'color_picker', 'hand_tool'].indexOf(name) !== -1 && name === tool) {
       setTool('');
       if (name === 'hand_tool') {
@@ -343,7 +348,6 @@ const items = [
       || name === 'hand_tool'
     ) {
       if (name === 'hand_tool') {
-
         room.handToolActive = true;
         updateSelector('hand');
         room.setMemberState({currentApplianceName: 'selector'});
@@ -358,7 +362,7 @@ const items = [
   }
 
   const onColorChanged = (color: any) => {
-    if (!room) return;
+    if (!room || !room.isWritable) return;
     const {rgb} = color;
     const {r, g, b} = rgb;
     room.setMemberState({
@@ -384,41 +388,25 @@ const items = [
       lock.current = true;
       whiteboard.join({
         rid: roomStore.state.course.rid,
-        uid: me.boardId,
+        uuid: course.boardId,
+        roomToken: course.boardToken,
         location: location.pathname,
         userPayload: {
           userId: roomStore.state.me.uid,
-          identity: roomStore.state.me.role === 'teacher' ? 'host' : 'guest'
+          identity: +roomStore.state.me.role === 1 ? 'host' : 'guest'
         }
       })
       .then(() => {
         console.log("join whiteboard success");
-      }).catch(console.warn)
+      }).catch((err: any) => {
+        console.warn(err)
+      })
       .finally(() => {
         lock.current = false;
       })
     }
 
-    if (!lock.current && course.boardId && me.boardId !== course.boardId && whiteboard.state.room) {
-      lock.current = true;
-      whiteboard.join({
-        rid: roomStore.state.course.rid,
-        uid: course.boardId,
-        location: location.pathname,
-        userPayload: {
-          userId: roomStore.state.me.uid,
-          identity: roomStore.state.me.role === 'teacher' ? 'host' : 'guest'
-        }
-      })
-      .then(() => {
-        console.log("rejoin whiteboard success");
-      }).catch(console.warn)
-      .finally(() => {
-        lock.current = false;
-      })
-    }
-
-  }, [rtmState.joined, me.boardId, course.boardId]);
+  }, [JSON.stringify([rtmState.joined, course.boardId, course.boardToken])]);
 
   const [uploadPhase, updateUploadPhase] = useState<string>('');
   const [convertPhase, updateConvertPhase] = useState<string>('');
@@ -502,14 +490,14 @@ const items = [
 
   useEffect(() => {
     if (!me.role || !room) return;
-    if (me.role === 'teacher') {
+    if (+me.role === 1) {
       if (roomStore.state.course.lockBoard) {
         room.setViewMode(ViewMode.Broadcaster);
       } else {
         room.setViewMode(ViewMode.Freedom);
       }
     }
-    if (me.role === 'student') {
+    if (+me.role === 2) {
       if (roomStore.state.course.lockBoard) {
         room.handToolActive = false;
         room.disableCameraTransform = true;
@@ -550,16 +538,16 @@ const items = [
     }
   }
 
-  useEffect(() => {
-    if (!room) return;
-    if (drawable === 'panel') {
-      room.disableDeviceInputs = true;
-      room.disableCameraTransform = true;
-      return;
-    }
-    room.disableDeviceInputs = false;
-    room.disableCameraTransform = false;
-  }, [drawable, room]);
+  // useEffect(() => {
+  //   if (!room) return;
+  //   if (drawable === 'panel') {
+  //     room.disableDeviceInputs = true;
+  //     room.disableCameraTransform = true;
+  //     return;
+  //   }
+  //   room.disableDeviceInputs = false;
+  //   room.disableCameraTransform = false;
+  // }, [drawable, room]);
 
   const showTools = drawable === 'drawable';
   
@@ -599,7 +587,7 @@ const items = [
         <UploadPanel />
         {children ? children : null}
       </div>
-      {me.role === 'teacher' && room ?
+      {me.role === 1 && room ?
         <ScaleController
           zoomScale={scale}
           onClick={() => {

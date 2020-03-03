@@ -19,7 +19,7 @@ interface NavProps {
   delay: string
   network: string
   cpu: string
-  role: string
+  role: number
   roomName: string
   time: number
   showSetting: boolean
@@ -62,7 +62,7 @@ export function Nav ({
     <div className={`nav-container ${isElectron ? 'draggable' : ''}`}>
       <div className="class-title">
         <span className="room-name">{roomName}</span>
-        {role === 'teacher' ? 
+        {+role === 1 ? 
           <Button className={`nav-button ${classState ? "stop" : "start"}`} name={classState ? t('nav.class_end') : t('nav.class_start')} onClick={(evt: any) => {
             handleClick("classState")
           }} /> : null}
@@ -214,7 +214,7 @@ export default function NavContainer() {
   const updateClassState = () => {
     if (!lock.current) {
       lock.current = true;
-      roomStore.updateMe({
+      roomStore.updateCourse({
         courseState: +!Boolean(roomStore.state.course.courseState)
       }).then(() => {
         console.log("update success");

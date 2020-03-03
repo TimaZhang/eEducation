@@ -19,14 +19,15 @@ export const WhiteboardAPI = {
         mode
       })
     });
-    let json = await response.json();
+    let json = response;
+    // let json = await response.json();
     return {
       uuid: get(json, 'msg.room.uuid'),
       roomToken: get(json, 'msg.roomToken')
     }
   },
 
-  async joinRoom (uuid: string, rid?: string): Promise<any> {
+  async joinRoom (uuid: string): Promise<any> {
     let response = await AgoraFetch(
       `${joinRoomApi}${sdkToken}&uuid=${uuid}`, {
         method: 'POST',
@@ -35,7 +36,8 @@ export const WhiteboardAPI = {
         }
       }
     );
-    let json = await response.json();
+    // let json = await response.json();
+    let json = response;
     return {
       uuid: uuid,
       roomToken: get(json, 'msg.roomToken')

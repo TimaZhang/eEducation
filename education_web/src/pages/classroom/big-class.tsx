@@ -166,7 +166,7 @@ export default function BigClass() {
               id={`${currentHost.streamID}`}
               account={currentHost.account}
               handleClick={onPlayerClick}
-              close={me.role === 'teacher' || +me.uid === currentHost.streamID}
+              close={me.role === 1 || +me.uid === currentHost.streamID}
               handleClose={handleClose}
               video={currentHost.video}
               audio={currentHost.audio}
@@ -202,7 +202,7 @@ export default function BigClass() {
         </div>
         <ChatBoard
           name={roomName}
-          teacher={role === 'teacher'}
+          teacher={role === 1}
           messages={messages}
           mute={Boolean(roomState.course.muteChat)}
           value={value}

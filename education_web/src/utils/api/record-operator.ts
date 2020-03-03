@@ -52,7 +52,8 @@ export class RecordOperator {
         clientRequest: {},
       })
     });
-    const res = await response.json();
+    const res = response;
+    // const res = await response.json();
     if (typeof res.resourceId === "string") {
       this.resourceId = res.resourceId;
     } else {
@@ -96,7 +97,8 @@ export class RecordOperator {
         },
       })
     });
-    const res = await response.json();
+    // const res = await response.json();
+    const res = response;
     if (typeof res.sid === "string") {
         this.recordId = res.sid;
     } else {

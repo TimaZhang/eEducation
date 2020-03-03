@@ -44,7 +44,7 @@ interface UserProps {
 
 interface StudentListProps {
   list: AgoraUser[]
-  role: string
+  role: number
 }
 
 export default function StudentList ({

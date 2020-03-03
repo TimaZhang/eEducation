@@ -15,7 +15,10 @@ import SmallClass from './classroom/small-class';
 import OneToOne from './classroom/one-to-one';
 import BigClass from './classroom/big-class';
 import { PageNotFound } from './404';
-// import ErrorPage from './error-page/error-page';
+import {eduApi} from '../services/edu-api';
+
+//@ts-ignore
+window.eduApi = eduApi
 
 export default function () {
   return (

@@ -3,7 +3,7 @@ import { AgoraElectronClient } from './../utils/agora-electron-client';
 import { ChatMessage, AgoraStream } from '../utils/types';
 import { Subject } from 'rxjs';
 import { Map, Set, List } from 'immutable';
-import AgoraRTMClient, { RoomMessage } from '../utils/agora-rtm-client';
+import AgoraRTMClient, { RoomMessage, ChatCmdType, CourseMessage } from '../utils/agora-rtm-client';
 import { globalStore } from './global';
 import AgoraWebClient from '../utils/agora-rtc-client';
 import { get, set, isEmpty } from 'lodash';
@@ -11,42 +11,10 @@ import { isElectron } from '../utils/platform';
 import GlobalStorage from '../utils/custom-storage';
 import { t } from '../i18n';
 import { jsonParse } from '../utils/helper';
+import { eduApi } from '../services/edu-api';
 
-function canJoin({ onlineStatus, roomType, channelCount, role }: { onlineStatus: any, role: string, channelCount: number, roomType: number }) {
-  const result = {
-    permitted: true,
-    reason: ''
-  }
-  const channelCountLimit = [2, 17, Infinity];
-
-  let maximum = channelCountLimit[roomType];
-  if (channelCount >= maximum) {
-    result.permitted = false;
-    result.reason = t('toast.teacher_and_student_over_limit');
-    return result;
-  }
-
-  const teacher = get(onlineStatus, 'teacher', false);
-  const studentsTotalCount: number = get(onlineStatus, 'studentsTotalCount', 0);
-
-  if (role === 'teacher') {
-    const isOnline = teacher;
-    if (isOnline) {
-      result.permitted = false;
-      result.reason = t('toast.teacher_exists');
-      return result;
-    }
-  }
-
-  if (role === 'student') {
-    if (studentsTotalCount >= maximum - 1) {
-      result.permitted = false;
-      result.reason = t('toast.student_over_limit');
-      return result;
-    }
-  }
-
-  return result;
+export interface NotifyFlag {
+  broad: boolean
 }
 
 export type LocalAttrs = Partial<AgoraUser & ClassState & {rawAccounts: any[]} & {broad: boolean}>;
@@ -58,39 +26,68 @@ export type ChannelAttrs = {
   video: number
   audio: number
   chat: number
+  grant_board: number
   class_state?: number
   mute_chat?: number
-  whiteboard_uid: string
-  shared_uid: number 
-  link_uid: number
+  whiteboard_uid?: string
+  shared_uid?: number 
+  link_uid?: number
   lock_board?: number
-  grant_board: number
 };
 export interface AgoraUser {
   uid: string
   account: string
-  role: string
+  role: number
   video: number
   audio: number
   chat: number
   boardId: string // whiteboard_uuid
-  sharedId: number // shared_uid
-  linkId: number // link_uid
-  lockBoard: number // lock_board
+  // sharedId: number // shared_uid
+  // linkId: number // link_uid
+  // lockBoard: number // lock_board
   grantBoard: number
+  coVideo: number
+}
+
+export interface Me extends AgoraUser {
+  rtmToken: string
+  rtcToken: string
+  channelName: string
+  screenId?: number
+  screenToken?: string
+  appID: string
 }
 
 export interface ClassState {
   rid: string
   roomName: string
   teacherId: string
-  roomType: number
   boardId: string // whiteboard_uuid
-  sharedId: number // shared_uid
-  linkId: number // link_uid
+  boardToken: string // whiteboard_token
+  // edu roomId
+  // 房间id
+  roomId: string
+
+  // edu roomType
+  // 房间类型
+  roomType: number
+
+  // lock board
+  // 锁定
   lockBoard: number // lock_board
+
+  // start class
+  // 开始上课
   courseState: number
+  // mute all chat
+  // 全员禁言
   muteChat: number
+  // recording 
+  recordId: number
+  recordingTime: number
+  isRecording: boolean
+  screenId: number
+  screenToken: string
 }
 
 type RtcState = {
@@ -100,7 +97,7 @@ type RtcState = {
   shared: boolean
   localStream: AgoraMediaStream | null
   localSharedStream: AgoraMediaStream | null
-  remoteStreams: Map<number, AgoraMediaStream>
+  remoteStreams: Map<string, AgoraMediaStream>
 }
 
 export type MediaDeviceState = {
@@ -131,7 +128,8 @@ export type RoomState = {
   rtmLock: boolean
   rtmToken: string
   rtcToken: string
-  me: AgoraUser
+  appID: string
+  me: Me
   users: Map<string, AgoraUser>
   course: ClassState
   applyUid: number
@@ -162,18 +160,19 @@ export class RoomStore {
     rtmLock: false,
     rtcToken: '',
     rtmToken: '',
+    appID: '',
     me: {
       account: "",
       uid: "",
-      role: "",
+      roomToken: "",
+      role: 0,
       video: 1,
       audio: 1,
       chat: 1,
-      linkId: 0,
-      sharedId: 0,
-      boardId: '',
-      lockBoard: 0,
       grantBoard: 0,
+      rtmToken: '',
+      rtcToken: '',
+      appID: '',
     },
     users: Map<string, AgoraUser>(),
     applyUid: 0,
@@ -188,19 +187,24 @@ export class RoomStore {
       users: Set<number>(),
       localStream: null,
       localSharedStream: null,
-      remoteStreams: Map<number, AgoraMediaStream>(),
+      remoteStreams: Map<string, AgoraMediaStream>(),
     },
     course: {
       teacherId: '',
       boardId: '',
-      sharedId: 0,
-      linkId: 0,
+      boardToken: '',
       courseState: 0,
       muteChat: 0,
+      isRecording: false,
+      recordId: '',
+      recordingTime: 0,
       rid: '',
       roomName: '',
       roomType: 0,
       lockBoard: 0,
+      roomId: '',
+      screenId: '',
+      screenToken: ''
     },
     mediaDevice: {
       microphoneId: '',
@@ -358,14 +362,14 @@ export class RoomStore {
       ...this.state,
       rtc: {
         ...this.state.rtc,
-        remoteStreams: this.state.rtc.remoteStreams.set(stream.streamID, stream)
+        remoteStreams: this.state.rtc.remoteStreams.set(`${stream.streamID}`, stream)
       }
     }
     this.commit(this.state);
   }
 
   removeRemoteStream(uid: number) {
-    const remoteStream = this.state.rtc.remoteStreams.get(uid);
+    const remoteStream = this.state.rtc.remoteStreams.get(`${uid}`);
     if (platform === 'web') {
       if (remoteStream && remoteStream.stream && remoteStream.stream.isPlaying) {
         remoteStream.stream.isPlaying() && remoteStream.stream.stop();
@@ -376,7 +380,7 @@ export class RoomStore {
       ...this.state,
       rtc: {
         ...this.state.rtc,
-        remoteStreams: this.state.rtc.remoteStreams.delete(uid)
+        remoteStreams: this.state.rtc.remoteStreams.delete(`${uid}`)
       }
     }
     this.commit(this.state);
@@ -422,43 +426,43 @@ export class RoomStore {
       const me = this.state.me;
       switch (cmd) {
         case RoomMessage.muteChat: {
-          return await this.updateMe({ chat: 0, broad: true });
+          return await this.updateLocalMe({ chat: 0, broad: true });
         }
         case RoomMessage.muteAudio: {
-          return await this.updateMe({ audio: 0, broad: true });
+          return await this.updateLocalMe({ audio: 0, broad: true });
         }
         case RoomMessage.muteVideo: {
-          return await this.updateMe({ video: 0, broad: true });
+          return await this.updateLocalMe({ video: 0, broad: true });
         }
         case RoomMessage.muteBoard: {
           globalStore.showToast({
             type: 'notice',
             message: t('toast.teacher_cancel_whiteboard'),
           });
-          return await this.updateMe({ grantBoard: 0, broad: true });
+          return await this.updateLocalMe({ grantBoard: 0, broad: true });
         }
         case RoomMessage.unmuteAudio: {
-          return await this.updateMe({ audio: 1, broad: true });
+          return await this.updateLocalMe({ audio: 1, broad: true });
         }
         case RoomMessage.unmuteVideo: {
-          return await this.updateMe({ video: 1, broad: true });
+          return await this.updateLocalMe({ video: 1, broad: true });
         }
         case RoomMessage.unmuteChat: {
-          return await this.updateMe({ chat: 1, broad: true });
+          return await this.updateLocalMe({ chat: 1, broad: true });
         }
         case RoomMessage.unmuteBoard: {
           globalStore.showToast({
             type: 'notice',
             message: t('toast.teacher_accept_whiteboard')
           });
-          return await this.updateMe({ grantBoard: 1, broad: true});
+          return await this.updateLocalMe({ grantBoard: 1, broad: true});
         }
         case RoomMessage.acceptCoVideo: {
           globalStore.showToast({
             type: 'co-video',
             message: t("toast.teacher_accept_co_video")
           });
-          await this.updateMe({broad: true});
+          await this.updateLocalMe({broad: true});
           console.log("setchannelAttrs succes")
           return;
         }
@@ -487,9 +491,9 @@ export class RoomStore {
         case RoomMessage.applyCoVideo: {
           // TODO: 这里linkId是用于控制是否能举手的
           // TODO: 你可以按照业务代替linkId属性
-          if (this.state.course.linkId) {
-            return console.warn('already received apply id: ', this.applyLock);
-          }
+          // if (this.state.course.linkId) {
+          //   return console.warn('already received apply id: ', this.applyLock);
+          // }
           // const applyUser = roomStore.state.users.get(`${peerId}`);
           // if (peerId) {
           const applyUid = +peerId
@@ -511,14 +515,12 @@ export class RoomStore {
         }
         case RoomMessage.cancelCoVideo: {
           // WARN: LOCK
-          if (this.state.course.linkId && `${this.state.course.linkId}` === peerId) {
-            await roomStore.updateCourseLinkUid(0)
-            console.log("cancelCoVideo updateLinkUid, 0")
-            globalStore.showToast({
-              type: 'co-video',
-              message: t('toast.student_cancel_co_video')
-            });
-          }
+          await roomStore.updateCourseLinkUid(0)
+          console.log("cancelCoVideo updateLinkUid, 0")
+          globalStore.showToast({
+            type: 'co-video',
+            message: t('toast.student_cancel_co_video')
+          });
           return;
         }
         default:
@@ -531,41 +533,41 @@ export class RoomStore {
     const me = this.state.me;
     if (me.uid === `${uid}`) {
       if (type === 'audio') {
-        await this.updateMe({
+        await this.updateLocalMe({
           audio: 0,
           broad: true
         });
       }
       if (type === 'video') {
-        await this.updateMe({
+        await this.updateLocalMe({
           video: 0,
           broad: true
         });
       }
       if (type === 'chat') {
-        await this.updateMe({
+        await this.updateLocalMe({
           chat: 0,
           broad: true
         });
       }
       // if (type === 'grantBoard') {
-      //   await this.updateMe({
+      //   await this.updateLocal({
       //     grant_board: 0
       //   });
       // }
     }
-    else if (me.role === 'teacher') {
+    else if (me.role === 1) {
       if (type === 'audio') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.muteAudio });
+        await this.updateUserBy(`${uid}`, {audio: 0});
       }
       if (type === 'video') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.muteVideo });
+        await this.updateUserBy(`${uid}`, {video: 0});
       }
       if (type === 'chat') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.muteChat });
+        await this.updateUserBy(`${uid}`, {chat: 0});
       }
       if (type === 'grantBoard') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.muteBoard });
+        await this.updateUserBy(`${uid}`, {grantBoard: 0});
       }
     }
   }
@@ -574,89 +576,163 @@ export class RoomStore {
     const me = this.state.me;
     if (me.uid === `${uid}`) {
       if (type === 'audio') {
-        await this.updateMe({
+        await this.updateLocalMe({
           audio: 1,
           broad: true
         });
       }
       if (type === 'video') {
-        await this.updateMe({
+        await this.updateLocalMe({
           video: 1,
           broad: true
         });
       }
       if (type === 'chat') {
-        await this.updateMe({
+        await this.updateLocalMe({
           chat: 1,
           broad: true
         });
       }
       // if (type === 'grantBoard') {
-      //   await this.updateMe({
+      //   await this.updateLocal({
       //     grant_board: 1
       //   });
       // }
     }
-    else if (me.role === 'teacher') {
+    else if (me.role === 1) {
       if (type === 'audio') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.unmuteAudio });
+        await this.updateUserBy(`${uid}`, {audio: 1});
       }
       if (type === 'video') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.unmuteVideo });
+        await this.updateUserBy(`${uid}`, {video: 1});
       }
       if (type === 'chat') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.unmuteChat });
+        await this.updateUserBy(`${uid}`, {chat: 1});
       }
       if (type === 'grantBoard') {
-        await this.rtmClient.sendPeerMessage(`${uid}`, { cmd: RoomMessage.unmuteBoard });
+        await this.updateUserBy(`${uid}`, {grantBoard: 1});
       }
     }
   }
 
-  async loginAndJoin(payload: any, pass: boolean = false) {
-    const { roomType, role, uid, rid, rtmToken } = payload;
-    console.log("payload: ", payload);
-    let result = { permitted: true, reason: '' };
-    await this.rtmClient.login(uid, rtmToken);
+  async LoginToRoom(payload: any, pass: boolean = false) {
+    const {userName, roomName, role, type} = payload
     try {
-      const channelMemberCount = await this.rtmClient.getChannelMemberCount([rid]);
-      const channelCount = channelMemberCount[rid];
-      let accounts = await this.rtmClient.getChannelAttributeBy(rid);
-      const onlineStatus = await this.rtmClient.queryOnlineStatusBy(accounts);
-      console.log("onlineStatus", onlineStatus);
-      const argsJoin = {
-        channelCount,
-        onlineStatus,
-        role,
-        accounts,
-        roomType
-      };
-      result = pass === false ? canJoin(argsJoin) : { permitted: true, reason: '' };
-      if (result.permitted) {
-        let res = await this.rtmClient.join(rid);
-        const grantBoard = role === 'teacher' ? 1 : 0;
-        await this.updateMe({ ...payload, grantBoard, rawAccounts: accounts });
-        this.state = {
-          ...this.state,
-          rtm: {
-            ...this.state.rtm,
-            joined: true
-          },
-        }
-        console.log("loginAndJoin>>>>: accounts", accounts, this.state.users);
-        this.commit(this.state);
-        return;
+      const res = await eduApi.Login({userName, roomName, role, type})
+
+      const {
+        course,
+        me,
+        users: rawUsers,
+        appID,
+      } = res
+
+      let users = rawUsers.reduce((acc: Map<string, AgoraUser>, it: any) => {
+        return acc.set(`${it.uid}`, {
+          role: it.role,
+          account: it.userName,
+          uid: it.uid,
+          video: it.enableVideo,
+          audio: it.enableAudio,
+          chat: it.enableChat,
+          grantBoard: it.grantBoard,
+          boardId: it.boardId,
+          // sharedId: it.screenId,
+          coVideo: it.coVideo,
+        });
+      }, Map<string, AgoraUser>());
+
+      console.log(">> res", course, me, users)
+
+      await this.rtmClient.login(`${me.uid}`, me.rtmToken)
+      await this.rtmClient.join(course.rid)
+      this.state = {
+        ...this.state,
+        rtm: {
+          ...this.state.rtm,
+          joined: true
+        },
+        course: {
+          ...this.state.course,
+          rid: course.channelName,
+          roomType: course.roomType,
+          roomId: course.roomId,
+          roomName: course.roomName,
+          courseState: course.courseState,
+          muteChat: course.muteAllChat,
+          isRecording: course.isRecording,
+          recordingTime: course.recordingTime,
+          lockBoard: course.lockBoard,
+          boardId: course.boardId,
+          boardToken: course.boardToken,
+          teacherId: course.teacherId,
+        },
+        me: {
+          ...this.state.me,
+          uid: me.uid,
+          account: me.userName,
+          rtmToken: me.rtmToken,
+          rtcToken: me.rtcToken,
+          channelName: me.channelName,
+          screenId: me.screenId,
+          screenToken: me.screenToken,
+          appID: me.appID,
+          role: me.role,
+          chat: me.enableChat,
+          video: me.enableVideo,
+          audio: me.enableAudio,
+        },
+        users,
+        appID,
       }
-      throw {
-        type: 'not_permitted',
-        reason: result.reason
-      }
-    } catch (err) {
+
+      console.log(">>>>>> res: ", res, " course", course.teacherId)
+      this.commit(this.state)
+      // this.updateLocal()
+      // this.updateLocal()
+    } catch(err) {
       if (this.rtmClient._logged) {
         await this.rtmClient.logout();
       }
       throw err;
     }
+  }
+
+  async updateToRoom(payload: any) {
+    return await eduApi.updateRoom(payload)
+  }
+
+  exactRoomAttrsFrom({json}: any) {
+
+    // const {course: prevCourseState, me: prevMeState, users: prevUsers} = this.state;
+
+    const {me, course, users} = json;
+    return {
+      course,
+      me,
+      users
+    }
+  }
+
+  async updateRoomAttrs(payload: any, local: boolean = false) {
+    const {
+      course, me, users
+    } = this.exactRoomAttrsFrom(payload);
+
+
+    const finalState = {
+      ...this.state,
+      course,
+      me,
+      users
+    }
+
+    if (local) {
+      await this.updateToRoom(payload)
+    }
+
+    this.state = finalState
+    this.commit(this.state)
   }
 
   setRTCJoined(joined: boolean) {
@@ -672,19 +748,19 @@ export class RoomStore {
 
   async updateCourseLinkUid(linkId: number) {
     const me = this.state.me;
-    const prevLinkId = this.state.course.linkId
-    if (prevLinkId) {
-      await this.deleteKey(prevLinkId)
-    }
-    let res = await this.updateMe({
-      linkId,
-    })
-    this.applyLock = linkId;
-    return res;
+    // const prevLinkId = this.state.course.linkId
+    // if (prevLinkId) {
+    //   await this.deleteKey(prevLinkId)
+    // }
+    // let res = await this.updateLocal({
+    //   linkId,
+    // })
+    // this.applyLock = linkId;
+    // return res;
   }
 
   async updateWhiteboardUid(boardId: string) {
-    let res = await this.updateMe({
+    let res = await this.updateLocal({
       boardId
     });
     console.log("[update whiteboard uuid] res", boardId);
@@ -704,9 +780,9 @@ export class RoomStore {
     this.commit(this.state);
   }
 
-  private compositeMe(params: Partial<AgoraUser>): AgoraUser {
+  private compositeMe(params: Partial<Me>): Me {
     console.log("compositeMe: ", params);
-    const newMe: AgoraUser = { ...this.state.me };
+    const newMe: Me = { ...this.state.me };
     for (const prop in params) {
       if (newMe.hasOwnProperty(prop) && params.hasOwnProperty(prop)) {
         set(newMe, prop, get(params, prop, ''));
@@ -726,245 +802,146 @@ export class RoomStore {
     return newCourse;
   }
 
-  private exactChannelAttrsBy(me: AgoraUser, course: ClassState): ChannelAttrs {
-    console.log("origin: ", me, course);
-    const newChannelAttrs: ChannelAttrs = {
-      uid: me.uid,
-      account: `${me.account}`,
-      role: `${me.role}`,
-      video: +me.video,
-      audio: +me.audio,
-      chat: +me.chat,
-      whiteboard_uid: me.boardId,
-      shared_uid: me.sharedId,
-      link_uid: +me.linkId,
-      lock_board: +me.lockBoard,
-      grant_board: +me.grantBoard,
+  async updateUserBy(uid: string, params: Partial<AgoraUser & NotifyFlag>) {
+    const {broad, ...userParams} = params
+    const prevUser = this.state.users.get(`${uid}`)
+    
+    const newUserAttrs: Partial<AgoraUser> = {
+      ...prevUser,
     }
 
-    if (!course.boardId && me.boardId) {
-      newChannelAttrs.whiteboard_uid = me.boardId;
+    const userKeys = Object.keys(userParams)
+
+    for (let key of userKeys) {
+      if (newUserAttrs.hasOwnProperty(key)
+        && userParams.hasOwnProperty(key)) {
+        set(newUserAttrs, key, get(userParams, key))
+      }
     }
 
-    if (me.role === 'teacher') {
-      newChannelAttrs.lock_board = course.lockBoard;
-      newChannelAttrs.class_state = course.courseState;
-      newChannelAttrs.mute_chat = course.muteChat;
+    if (broad) {
+      await this.updateToRoom({users: newUserAttrs})
     }
 
-    return newChannelAttrs;
+    this.state = {
+      ...this.state,
+      users: this.state.users.set(`${newUserAttrs.uid}`, newUserAttrs as AgoraUser)
+    }
+    this.commit(this.state)
   }
 
-  async updateMe(params: LocalAttrs) {
-    const {rawAccounts = [], broad = false} = params
-    const newMe = this.compositeMe(params);
-    let newCourse = this.compositeCourse(params);
-    const {
-      role,
-      uid,
-    } = newMe;
+  async fetchCourse() {
+    let course = await eduApi.getCourseState(this.state.course.roomId)
+    return await this.updateCourse({...course, broad: false})
+  }
 
-    const channelKey: string = role === 'teacher' ? 'teacher' : `${uid}`;
+  async updateLocalMe(params: Partial<Me & NotifyFlag>) {
+    const {broad, ...meParams} = params
+    const newMe = this.compositeMe(meParams)
 
-    if (role === 'teacher') {
-      newCourse.teacherId = uid;
+    const newMeParams = {
+      uid: newMe.uid,
+      account: newMe.account,
+      role: newMe.role,
+      video: newMe.video,
+      audio: newMe.audio,
+      chat: newMe.chat,
+      boardId: newMe.boardId,
+      grantBoard: newMe.grantBoard,
+      coVideo: newMe.coVideo,
     }
 
-    const channelAttrs = this.exactChannelAttrsBy(newMe, newCourse);
+    if (broad) {
+      await this.updateToRoom({users: [newMeParams]})
+    }
+
+    this.state = {
+      ...this.state,
+      me: {
+        ...this.state.me,
+        ...newMeParams,
+      },
+      users: this.state.users.set(`${this.state.me.uid}`, newMeParams)
+    }
+    this.commit(this.state)
+  }
+
+  async updateCourse(params: Partial<ClassState & NotifyFlag>) {
+    const {broad = true, ...courseParams} = params
+
+    const keys = ['lockBoard', 'courseState', 'muteChat']
+    const resolveResource = (params: Partial<ClassState>): any => {
+      for (let key of keys) {
+        if (courseParams.hasOwnProperty(key)) {
+          let value = -1
+          let stateValue = get(params, key, 0)
+          if (key === 'lockBoard') {
+            value = stateValue ? RoomMessage.lockBoard : RoomMessage.unlockBoard
+          } else if (key === 'courseState') {
+            value = stateValue ? RoomMessage.startCourse : RoomMessage.endCourse
+          } else if (key === 'muteChat') {
+            value = stateValue ? RoomMessage.muteAllChat : RoomMessage.unmuteAllChat
+          }
+          return {
+            key,
+            stateValue,
+            value
+          }
+        }
+      }
+    }
+
+    const {key, stateValue, value}: any = resolveResource(courseParams)
+
+    if (broad) {
+      await eduApi.updateRoom({
+        room: {
+          [`${key}`]: stateValue
+        }
+      })
+      this.state = {
+        ...this.state,
+        course: {
+          ...this.state.course,
+          ...courseParams
+        }
+      }
+      this.commit(this.state)
+      await this.rtmClient.notifyMessage({
+        cmd: ChatCmdType.course,
+        data: {
+          operate: value,
+        },
+        enableHistoricalMessaging: false
+      })
+      return
+    }
+    this.state = {
+      ...this.state,
+      course: {
+        ...this.state.course,
+        ...courseParams
+      }
+    }
+    this.commit(this.state)
+  }
+
+  async updateLocal(params: LocalAttrs) {
+    const newMe = this.compositeMe(params)
+    const newCourse = this.compositeCourse(params)
+    const users = this.state.users
+
     this.state = {
       ...this.state,
       me: {
         ...newMe,
       },
-      users: this.state.users.set(newMe.uid, {
-        ...newMe
-      }),
+      users,
       course: {
         ...newCourse,
       }
     }
-    this.commit(this.state);
-
-    // in large class student shouldn't update channelAttributes
-    if (this.state.me.role === 'student' && this.state.course.roomType === 2) {
-      // if (rawAccounts)
-      for (const account of rawAccounts) {
-        console.log("accounts, ", account)
-        this.state.users = this.state.users.set(account.uid, account)
-      }
-
-      const teacherState = rawAccounts.find((it: any) => it.role === 'teacher')
-
-      if (teacherState) {
-        newCourse = this.compositeCourse(teacherState)
-        if (newCourse.hasOwnProperty('teacherId')) {
-          newCourse.teacherId = teacherState.uid
-        }
-
-        if (teacherState.hasOwnProperty('boardId')) {
-          newCourse.boardId = teacherState.boardId
-        }
-      }
-      console.log("update channelAttrs broad, ",broad)
-      this.updateLiveAttrs({users: this.state.users, newClassState: newCourse})
-      if (broad === false) return 
-    }
-
-    if (channelAttrs) {
-      channelAttrs.video = +this.state.me.video
-      channelAttrs.audio = +this.state.me.audio
-      channelAttrs.chat = +this.state.me.chat
-    }
-
-    console.log("update channelAttrs", channelAttrs, " channelKey ", channelKey)
-
-    await this.rtmClient.updateChannelAttrsByKey(channelKey, channelAttrs);
-    return
-  }
-
-  private serializeFrom(json: object) {
-    return {
-      teacherJson: jsonParse(get(json, 'teacher.value')),
-      studentsJson: Object.keys(json).filter(key => key !== 'teacher').map(key => jsonParse(get(json, `${key}.value`)))
-    }
-  }
-
-  private exactChannelAttrsFrom({teacherJson, studentsJson}: any) {
-    const defaultCourseState = {
-      class_state: 0,
-      link_uid: 0,
-      shared_uid: 0,
-      mute_chat: 0,
-      whiteboard_uid: 0,
-      lock_board: 0,
-      // grant_board: 0,
-    }
-
-    const AgoraUserKeys: string[] = [
-      'uid',
-      'account',
-      'role',
-      'video',
-      'audio',
-      'chat',
-      'whiteboard_uid',
-      'shared_uid',
-      'mute_chat',
-      'link_uid',
-      'class_state',
-      'grant_board',
-      'lock_board'
-    ];
-    const course: any = {};
-    let accounts: Map<string, any> = Map<string, any>();
-    if (teacherJson) {
-      // serialize as course
-      for (const prop in teacherJson) {
-        if (defaultCourseState.hasOwnProperty(prop)) {
-          course[prop] = teacherJson[prop];
-        }
-      }
-      // serialize as teacher
-      const teacher: any = {};
-      for (const prop of AgoraUserKeys) {
-        if (teacherJson.hasOwnProperty(prop)) {
-          teacher[prop] = teacherJson[prop]
-        }
-      }
-      if (!isEmpty(teacher)) {
-        accounts = accounts.set(teacher.uid, teacher)
-      }
-    }
-
-    // serialize students
-    for (let student of studentsJson) {
-      // exclude teacher in students serializer
-      if (!isEmpty(student)) {
-        const tempStudent: any = {};
-        for (const prop of AgoraUserKeys) {
-          if (student.hasOwnProperty(prop)) {
-            tempStudent[prop] = student[prop]
-          }
-        }
-        if (!isEmpty(tempStudent)) {
-          accounts = accounts.set(tempStudent.uid, tempStudent)
-        }
-      }
-    }
-
-    console.log("origin accounts", accounts.toJSON(), teacherJson, studentsJson)
-
-    const teacher = accounts.get(teacherJson.uid)
-
-    const users = accounts.reduce((acc: Map<string, AgoraUser>, it: any) => {
-      return acc.set(it.uid, {
-        role: it.role,
-        account: it.account,
-        uid: it.uid,
-        video: it.video,
-        audio: it.audio,
-        chat: it.chat,
-        boardId: it.whiteboard_uid,
-        sharedId: it.shared_uid,
-        linkId: it.link_uid,
-        lockBoard: it.lock_board,
-        grantBoard: it.grant_board
-      });
-    }, Map<string, AgoraUser>());
-
-    const newClassState: Partial<ClassState> = {
-      teacherId: get(teacher, 'uid', 0),
-      linkId: course.link_uid,
-      boardId: course.whiteboard_uid,
-      courseState: course.class_state,
-      muteChat: course.mute_chat,
-      lockBoard: course.lock_board
-    };
-
-    return {
-      users,
-      newClassState
-    };
-  }
-
-  updateLiveAttrs({users, newClassState}: any) {
-    const me = this.state.me;
-    let newMeValue: Partial<AgoraUser> = {};
-
-    if (users.get(me.uid)) {
-      newMeValue = users.get(me.uid) as AgoraUser;
-    } else {
-      newMeValue = me;
-    }
-
-    const newMe = this.compositeMe(newMeValue);
-    const _Users = users.set(newMe.uid, {...newMe});
-    const newCourse = this.compositeCourse(newClassState);
-
-    this.state = {
-      ...this.state,
-      users: _Users,
-      me: {
-        ...this.state.me,
-        ...newMe,
-      },
-      course: {
-        ...this.state.course,
-        ...newCourse
-      }
-    }
-    this.commit(this.state);
-    console.log('this.users ', this.state.users.toJSON(), this.state.course)
-  }
-
-  updateRoomAttrsBy(rawData: object) {
-    const jsonObject = this.serializeFrom(rawData)
-    console.log("origin jsonObject", jsonObject)
-    const {
-      users,
-      newClassState
-    } = this.exactChannelAttrsFrom(jsonObject);
-    this.updateLiveAttrs({users, newClassState});
+    this.commit(this.state)
   }
 
   async exitAll() {

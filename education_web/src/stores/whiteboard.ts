@@ -2,7 +2,7 @@ import { APP_ID } from './../utils/agora-rtm-client';
 import { EventEmitter } from 'events';
 import { videoPlugin } from '@netless/white-video-plugin';
 import { audioPlugin } from '@netless/white-audio-plugin';
-import { Room, WhiteWebSdk, DeviceType, SceneState, createPlugins, RoomPhase } from 'white-web-sdk';
+import { RoomErrorLevel, Room, WhiteWebSdk, DeviceType, SceneState, createPlugins, RoomPhase } from 'white-web-sdk';
 import { Subject } from 'rxjs';
 import { WhiteboardAPI, RecordOperator } from '../utils/api';
 import {Map} from 'immutable';
@@ -67,11 +67,13 @@ export type WhiteboardState = {
   recording: boolean
   startTime: number
   endTime: number
+  // isWritable: 
 }
 
 type JoinParams = {
   rid: string
-  uid?: string
+  uuid: string
+  roomToken: string
   location?: string
   userPayload: {
     userId: string,
@@ -97,6 +99,7 @@ class Whiteboard extends EventEmitter {
     endTime: 0,
     room: null,
     loading: true,
+    // isWritable: false,
     ...GlobalStorage.read('mediaDirs'),
   }
 
@@ -264,29 +267,6 @@ class Whiteboard extends EventEmitter {
     this.commit(this.state);
   }
 
-  async connect(rid: string, uuid?: string) {
-    let retrying;
-    let time = 0;
-    let reason;
-    do {
-      try {
-        let res;
-        if (uuid) {
-          res = await WhiteboardAPI.joinRoom(uuid);
-        } else {
-          res = await WhiteboardAPI.createRoom({rid, limit: 100, mode: 'historied'});
-        }
-        retrying = false;
-        return res;
-      } catch(err) {
-        retrying = true;
-        time++;
-        reason = err;
-      }
-    } while(retrying && time < 3);
-    throw reason;
-  }
-
   updateLoading(value: boolean) {
     this.state = {
       ...this.state,
@@ -295,9 +275,8 @@ class Whiteboard extends EventEmitter {
     this.commit(this.state);
   }
 
-  async join({rid, uid, location, userPayload}: JoinParams) {
+  async join({rid, uuid, roomToken, location, userPayload}: JoinParams) {
     await this.leave();
-    const {uuid, roomToken} = await this.connect(rid, uid);
     const identity = userPayload.identity === 'host' ? 'host' : 'guest';
 
     plugins.setPluginContext("video", {identity});
@@ -305,18 +284,21 @@ class Whiteboard extends EventEmitter {
 
     const disableDeviceInputs: boolean = location!.match(/big-class/) && identity !== 'host' ? true : false;
     const disableOperations: boolean = location!.match(/big-class/) && identity !== 'host' ? true : false;
-    // const isWritable: boolean = location!.match(/big-class/) && identity !== 'host' ? false : true;
+    const isWritable: boolean = location!.match(/big-class/) && identity !== 'host' ? false : true;
 
-    console.log(`[White] disableDeviceInputs, ${disableDeviceInputs}, disableOperations, ${disableOperations}, location: ${location}`);
+    console.log(`[White] isWritable, ${isWritable}, disableDeviceInputs, ${disableDeviceInputs}, disableOperations, ${disableOperations}, location: ${location}`);
 
-    const room = await this.client.joinRoom({
+    const roomParams = {
       uuid,
       roomToken,
       disableBezier: true,
       disableDeviceInputs,
       disableOperations,
-      // isWritable,
-    }, {
+      isWritable,
+      // rejectWhenReadonlyErrorLevel: RoomErrorLevel.Ignore,
+    }
+
+    const room = await this.client.joinRoom(roomParams, {
       onPhaseChanged: (phase: RoomPhase) => {
         if (phase === RoomPhase.Connected) {
           this.updateLoading(false);
@@ -341,11 +323,9 @@ class Whiteboard extends EventEmitter {
       onPPTLoadProgress: (uuid: string, progress: number) => {},
     });
 
-    await roomStore.updateWhiteboardUid(room.uuid);
-
     this.state = {
       ...this.state,
-      room: room
+      room,
     }
     this.commit(this.state);
   }
@@ -460,22 +440,22 @@ class Whiteboard extends EventEmitter {
   }
 
   async lock() {
-    const lockBoardStatus = Boolean(roomStore.state.me.lockBoard);
-    const lockBoard = lockBoardStatus ? 0 : 1;
+    const lockBoardStatus = Boolean(roomStore.state.course.lockBoard)
+    const lockBoard = lockBoardStatus ? 0 : 1
+    await roomStore.updateCourse({
+      lockBoard
+    })
     if (lockBoard) {
       globalStore.showToast({
         type: 'notice-board',
         message: t('toast.whiteboard_lock')
-      });
+      })
     } else {
       globalStore.showToast({
         type: 'notice-board',
         message: t('toast.whiteboard_unlock')
-      });
+      })
     }
-    await roomStore.updateMe({
-      lockBoard
-    });
   }
 }
 

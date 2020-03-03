@@ -244,7 +244,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         account ?
           <div className="video-profile">
             <span className="account">{account}</span>
-            {me.uid === id || me.role === 'teacher' ?
+            {me.uid === id || me.role === 1 ?
               <span className="media-btn">
                 <Icon onClick={onAudioClick} className={audio ? "icon-speaker-on" : "icon-speaker-off"} data={"audio"} />
                 <Icon onClick={onVideoClick} className={video ? "icons-camera-unmute-s" : "icons-camera-mute-s"} data={"video"} />

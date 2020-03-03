@@ -20,10 +20,10 @@ export default function useStream () {
 
   const teacher = useMemo(() => {
     if (!course.teacherId || !me.uid) return;
-    const teacherInfo = roomStore.state.users.get(''+course.teacherId);
+    const teacherInfo = roomStore.state.users.get(`${course.teacherId}`);
     if (!teacherInfo) return;
 
-    if (me.uid === course.teacherId) {
+    if (+me.uid === +course.teacherId) {
       return {
         ...roomState.rtc.localStream,
         account: teacherInfo.account,
@@ -36,7 +36,7 @@ export default function useStream () {
       const teacherUid = roomState.rtc.users.get(+course.teacherId);
       if(!teacherUid) return null;
       // when peer teacher stream is found
-      const remoteTeacherStream = roomState.rtc.remoteStreams.get(teacherUid);
+      const remoteTeacherStream = roomState.rtc.remoteStreams.get(`${teacherUid}`);
       if (remoteTeacherStream) {
         return {
           ...remoteTeacherStream,
@@ -69,10 +69,10 @@ export default function useStream () {
     let studentIds = peerUsers.filter((it: number) => it !== +teacherUid && it !== +me.uid && it !== SHARE_ID);
 
     const studentStreams: any[] = [];
-    const myAttr = userAttrs.get(me.uid);
+    const myAttr = userAttrs.get(`${me.uid}`);
 
     // when i m student
-    if (me.role === 'student') {
+    if (+me.role === 2) {
       if (myAttr && roomState.rtc.localStream) {
         const _tmpStream = {
           ...roomState.rtc.localStream,
@@ -87,8 +87,8 @@ export default function useStream () {
 
     // capture all remote streams
     for (let studentId of studentIds) {
-      const studentAttr = userAttrs.get(''+studentId);
-      const stream = roomState.rtc.remoteStreams.get(+studentId);
+      const studentAttr = userAttrs.get(`${studentId}`);
+      const stream = roomState.rtc.remoteStreams.get(`${studentId}`);
       if (studentAttr) {
         let _tmpStream = {
           streamID: studentId,
@@ -128,7 +128,7 @@ export default function useStream () {
       return _tmpStream;
     }
 
-    const remoteStream = roomState.rtc.remoteStreams.get(sharedUid);
+    const remoteStream = roomState.rtc.remoteStreams.get(`${sharedUid}`);
 
     if (remoteStream) {
       const _tmpStream = {
@@ -142,10 +142,13 @@ export default function useStream () {
     return null;
   }, [roomState.rtc.remoteStreams, roomState.rtc.localSharedStream]);
 
+  // TODO: need deprecate
   const currentHost = useMemo(() => {
+    //@ts-ignore
     if (!course.linkId) return null;
+    //@ts-ignore
     const linkId = ''+course.linkId;
-    const userAttr = roomState.users.get(linkId);
+    const userAttr = roomState.users.get(`${linkId}`);
     if (!userAttr) return null;
     // when i am current broadcaster
     if (me.uid === linkId) {
@@ -162,10 +165,11 @@ export default function useStream () {
       }
     } else {
       // when remote user is broadcaster
+      //@ts-ignore
       const peerUid = course.linkId;
-      const peerUserAttr = roomState.users.get(''+peerUid);
+      const peerUserAttr = roomState.users.get(`${peerUid}`);
       if (peerUid && peerUserAttr) {
-        const remoteStream = roomState.rtc.remoteStreams.get(peerUid);
+        const remoteStream = roomState.rtc.remoteStreams.get(`${peerUid}`);
         if (remoteStream) {
           let _tmpStream = {
             ...remoteStream,
@@ -196,7 +200,7 @@ export default function useStream () {
       console.log(" click player ", type, streamID, uid);
       const me = roomStore.state.me;
       if (!roomStore.state.rtm.joined || !me.uid) return console.warn("please confirm joined rtm");
-      const targetUser = roomStore.state.users.get(uid);
+      const targetUser = roomStore.state.users.get(`${uid}`);
       console.log("targetUser : ", targetUser);
       if (!targetUser) return;
 
