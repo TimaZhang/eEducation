@@ -1,5 +1,15 @@
 import { AgoraFetch } from "../utils/fetch";
-import { ClassState } from "../stores/room";
+import { ClassState, AgoraUser } from "../stores/room";
+import {Map} from 'immutable'
+
+export interface UserAttrsParams {
+  userId: string
+  enableChat: number
+  enableVideo: number
+  enableAudio: number
+  grantBoard: number
+  coVideo: number
+}
 
 const PREFIX: string = process.env.REACT_APP_AGORA_EDU_ENDPOINT_PREFIX as string;
 
@@ -58,7 +68,7 @@ export interface RoomParams {
     [key: string]: any
   }>
   user: {
-    userId: number
+    userId: string
     enableChat: number
     enableVideo: number
     enableAudio: number
@@ -118,19 +128,36 @@ export class AgoraEduApi {
       authorization: this.authorization,
     });
     return {
-      data
+      rtcToken: data.rtcToken,
+      rtmToken: data.rtmToken,
+      screenToken: data.screenToken
     }
   }
 
-
-  // update room state
-  // 更新房间状态
-  async updateRoom(params: Partial<RoomParams>) {
-    const {room, user} = params
+  // update course
+  // 更新课程状态
+  async updateCourse(params: Partial<RoomParams>) {
+    const {room} = params
     const dataParams: any = {}
     if (room) {
       dataParams.room = room
     }
+    let data = await AgoraFetchJson({
+      url: `/v1/apps/${this.appID}/room/${this.roomId}`,
+      method: 'POST',
+      data: dataParams,
+      token: this.userToken,
+      authorization: this.authorization
+    });
+    return {
+      data,
+    }
+  }
+
+  // 即将废弃, 需要更改为@next
+  async updateRoomUser(params: Partial<RoomParams>) {
+    const {user} = params
+    const dataParams: any = {}
     if (user) {
       dataParams.users = [user]
     }
@@ -145,6 +172,23 @@ export class AgoraEduApi {
       data,
     }
   }
+
+  // @next
+  // update users 
+  // 更新用户状态，老师可更新房间内所有人，学生只能更新自己
+  // async updateRoomUser(user: Partial<UserAttrsParams>) {
+  //   const {userId, ...userAttrs} = user
+  //   let data = await AgoraFetchJson({
+  //     url: `/v1/apps/${this.appID}/room/${this.roomId}/user/${userId}`,
+  //     method: 'POST',
+  //     data: userAttrs,
+  //     token: this.userToken,
+  //     authorization: this.authorization
+  //   });
+  //   return {
+  //     data,
+  //   }
+  // }
 
   // start recording
   // 开始录制
@@ -203,6 +247,49 @@ export class AgoraEduApi {
     }
   }
 
+  // getUsersState
+  // 获取用户状态
+  async getRoomState(roomId: string): Promise<{users: Map<string, AgoraUser>, room: Partial<ClassState>}> {
+    const {data} = await this.getRoomInfoBy(roomId)
+    const {users: rawUsers, room: rawCourse} = data
+
+    let users: Map<string, AgoraUser> = rawUsers.reduce((acc: Map<string, AgoraUser>, it: any) => {
+      return acc.set(`${it.uid}`, {
+        role: it.role,
+        account: it.userName,
+        uid: it.uid,
+        video: it.enableVideo,
+        audio: it.enableAudio,
+        chat: it.enableChat,
+        grantBoard: it.grantBoard,
+        userId: it.userId,
+        screenId: it.screenId,
+        coVideo: it.coVideo,
+      });
+    }, Map<string, AgoraUser>());
+
+    const room: Partial<ClassState> = {
+      courseState: rawCourse.courseState,
+      muteChat: rawCourse.muteAllChat,
+      isRecording: rawCourse.isRecording,
+      boardId: rawCourse.boardId,
+      boardToken: rawCourse.boardToken,
+      lockBoard: rawCourse.lockBoard,
+      teacherId: ''
+    }
+
+    const teacher = users.find((it: AgoraUser) => it.role === 1)
+
+    if (teacher) {
+      room.teacherId = teacher.uid
+    }
+
+    return {
+      users,
+      room
+    }
+  }
+
   // getCourseState
   // 获取房间状态
   async getCourseState(roomId: string): Promise<Partial<ClassState>> {
@@ -256,6 +343,7 @@ export class AgoraEduApi {
     const me = users.find((user: any) => user.userId === userId)
 
     if (me) {
+      me.userId = userId
       me.rtcToken = rtcToken
       me.rtmToken = rtmToken
       me.screenToken = screenToken

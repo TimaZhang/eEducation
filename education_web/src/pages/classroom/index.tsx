@@ -224,6 +224,7 @@ export function RoomPage({ children }: any) {
         webClient.rtc.on('stream-published', ({ stream }: any) => {
           const _stream = new AgoraStream(stream, stream.getId(), true);
           roomStore.addLocalStream(_stream);
+          roomStore.addRTCUser(stream.getId())
         });
         webClient.rtc.on('stream-subscribed', ({ stream }: any) => {
           const streamID = stream.getId();
@@ -261,7 +262,7 @@ export function RoomPage({ children }: any) {
         });
         webClient.rtc.on('peer-online', ({uid}: any) => {
           console.log("[agora-web] peer-online, id: ", uid);
-          roomStore.addPeerUser(uid);
+          roomStore.addRTCUser(uid);
         });
         webClient.rtc.on('peer-leave', ({ uid }: any) => {
           console.log("[agora-web] peer-leave, id: ", uid, roomStore.applyUid);
@@ -355,7 +356,7 @@ export function RoomPage({ children }: any) {
               console.log("[agora-electron] dual stream set low for student, ", res);
             }
           }
-          roomStore.addPeerUser(stream.uid);
+          roomStore.addRTCUser(stream.uid);
           roomStore.addRemoteStream(_stream);
         });
         // when trigger `removestream` it means peer user & peer stream is offline

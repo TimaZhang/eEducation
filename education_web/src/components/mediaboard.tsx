@@ -60,83 +60,6 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
 
   const {sharedStream} = useStream();
 
-  const shared = roomState.rtc.shared;
-
-  useEffect(() => {
-    if (!shared && platform === 'web') return;
-
-    const rtcClient = roomStore.rtcClient;
-    if (!shared) {
-      if (platform === 'electron') {
-        const nativeClient = rtcClient as AgoraElectronClient;
-        console.log("[native] electron screen sharing shared: ", shared, " nativeClient.shared: ", nativeClient.shared);
-        nativeClient.shared &&
-        nativeClient.stopScreenShare().then(() => {
-          console.log("[native] remove local shared stream");
-        }).catch(console.warn);
-        return;
-      }
-    }
-
-    if (platform === 'web') {
-      const webClient = rtcClient as AgoraWebClient;
-      // WARN: IF YOU ENABLED APP CERTIFICATE, PLEASE SIGN YOUR TOKEN IN YOUR SERVER SIDE AND OBTAIN IT FROM YOUR OWN TRUSTED SERVER API
-      const screenShareToken = '';
-      webClient.startScreenShare(screenShareToken).then(() => {
-        webClient.shareClient.on('onTokenPrivilegeWillExpire', (evt: any) => {
-          // WARN: IF YOU ENABLED APP CERTIFICATE, PLEASE SIGN YOUR TOKEN IN YOUR SERVER SIDE AND OBTAIN IT FROM YOUR OWN TRUSTED SERVER API
-          const newToken = '';
-          webClient.shareClient.renewToken(newToken);
-        });
-        webClient.shareClient.on('onTokenPrivilegeDidExpire', (evt: any) => {
-          // WARN: IF YOU ENABLED APP CERTIFICATE, PLEASE SIGN YOUR TOKEN IN YOUR SERVER SIDE AND OBTAIN IT FROM YOUR OWN TRUSTED SERVER API
-          const newToken = '';
-          webClient.shareClient.renewToken(newToken);
-        });
-        webClient.shareClient.on('stopScreenSharing', (evt: any) => {
-          console.log('stop screen share', evt);
-          webClient.stopScreenShare().then(() => {
-            globalStore.showToast({
-              message: t('toast.canceled_screen_share'),
-              type: 'notice'
-            });
-            roomStore.setScreenShare(false);
-          }).catch(console.warn).finally(() => {
-            console.log('[agora-web] stop share');
-          })
-        })
-        const localShareStream = webClient.shareClient._localStream
-        const _stream = new AgoraStream(localShareStream, localShareStream.getId(), true);
-        roomStore.addLocalSharedStream(_stream);
-      }).catch((err: any) => {
-        roomStore.setScreenShare(false);
-        if (err.type === 'error' && err.msg === 'NotAllowedError') {
-          globalStore.showToast({
-            message: t('toast.canceled_screen_share'),
-            type: 'notice'
-          });
-        }
-        if (err.type === 'error' && err.msg === 'PERMISSION_DENIED') {
-          globalStore.showToast({
-            message: t('toast.screen_sharing_failed', {reason: err.msg}),
-            type: 'notice'
-          });
-        }
-        console.warn(err);
-      }).finally(() => {
-        console.log('[agora-web] start share');
-      })
-      return () => {
-        console.log("before shared change", shared);
-        shared && webClient.stopScreenShare().then(() => {
-          roomStore.setScreenShare(false);
-        }).catch(console.warn).finally(() => {
-          console.log('[agora-web] stop share');
-        })
-      }
-    }
-  }, [shared]);
-
   const handlePageTool: any = (evt: any, type: string) => {
     setPageTool(type);
     console.log("[page-tool] click ", type);
@@ -154,22 +77,6 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
 
     if (type === 'next_page') {
       changePage(currentPage+1);
-    }
-
-    if (type === 'screen_sharing') {
-      roomStore.setScreenShare(true);
-
-      if (platform === 'electron') {
-        const rtcClient = roomStore.rtcClient;
-        globalStore.setNativeWindowInfo({
-          visible: true,
-          items: (rtcClient as AgoraElectronClient).getScreenShareWindows()
-        })
-      }
-    }
-
-    if (type === 'quit_screen_sharing') {
-      roomStore.setScreenShare(false);
     }
 
     if (type === 'peer_hands_up') {

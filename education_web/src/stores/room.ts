@@ -3,15 +3,14 @@ import { AgoraElectronClient } from './../utils/agora-electron-client';
 import { ChatMessage, AgoraStream } from '../utils/types';
 import { Subject } from 'rxjs';
 import { Map, Set, List } from 'immutable';
-import AgoraRTMClient, { RoomMessage, ChatCmdType, CourseMessage } from '../utils/agora-rtm-client';
+import AgoraRTMClient, { RoomMessage, ChatCmdType } from '../utils/agora-rtm-client';
 import { globalStore } from './global';
 import AgoraWebClient from '../utils/agora-rtc-client';
 import { get, set, isEmpty } from 'lodash';
 import { isElectron } from '../utils/platform';
 import GlobalStorage from '../utils/custom-storage';
 import { t } from '../i18n';
-import { jsonParse } from '../utils/helper';
-import { eduApi } from '../services/edu-api';
+import { eduApi, UserAttrsParams } from '../services/edu-api';
 
 export interface NotifyFlag {
   broad: boolean
@@ -19,21 +18,6 @@ export interface NotifyFlag {
 
 export type LocalAttrs = Partial<AgoraUser & ClassState & {rawAccounts: any[]} & {broad: boolean}>;
 
-export type ChannelAttrs = {
-  uid: string
-  account: string
-  role: string
-  video: number
-  audio: number
-  chat: number
-  grant_board: number
-  class_state?: number
-  mute_chat?: number
-  whiteboard_uid?: string
-  shared_uid?: number 
-  link_uid?: number
-  lock_board?: number
-};
 export interface AgoraUser {
   uid: string
   account: string
@@ -41,19 +25,19 @@ export interface AgoraUser {
   video: number
   audio: number
   chat: number
-  boardId: string // whiteboard_uuid
   // sharedId: number // shared_uid
   // linkId: number // link_uid
   // lockBoard: number // lock_board
   grantBoard: number
   coVideo: number
+  userId: string // 仅用于服务端
+  screenId: string //仅用于屏幕共享
 }
 
 export interface Me extends AgoraUser {
   rtmToken: string
   rtcToken: string
   channelName: string
-  screenId?: number
   screenToken?: string
   appID: string
 }
@@ -83,10 +67,10 @@ export interface ClassState {
   // 全员禁言
   muteChat: number
   // recording 
-  recordId: number
+  recordId: string
   recordingTime: number
   isRecording: boolean
-  screenId: number
+  screenId: string
   screenToken: string
 }
 
@@ -220,7 +204,7 @@ export class RoomStore {
     ...GlobalStorage.read('agora_room')
   });
 
-  private applyLock: number = 0;
+  public applyLock: number = 0;
 
   public windowId: number = 0;
 
@@ -335,7 +319,7 @@ export class RoomStore {
     this.commit(this.state);
   }
 
-  addPeerUser(uid: number) {
+  addRTCUser(uid: number) {
     this.state = {
       ...this.state,
       rtc: {
@@ -418,54 +402,56 @@ export class RoomStore {
 
   async handlePeerMessage(cmd: RoomMessage, peerId: string) {
     if (!peerId) return console.warn('state is not assigned');
-    const myUid = this.state.me.uid;
+    const myUid = `${this.state.me.uid}`;
     console.log("Teacher: ", this.isTeacher(myUid), ", peerId: ", this.isStudent(peerId), " myUid ", myUid, " peerId ", peerId);
     // student follow teacher peer message
+    // 当对端是老师的时候
     if (!this.isTeacher(myUid) && this.isTeacher(peerId)) {
 
       const me = this.state.me;
       switch (cmd) {
-        case RoomMessage.muteChat: {
-          return await this.updateLocalMe({ chat: 0, broad: true });
-        }
-        case RoomMessage.muteAudio: {
-          return await this.updateLocalMe({ audio: 0, broad: true });
-        }
-        case RoomMessage.muteVideo: {
-          return await this.updateLocalMe({ video: 0, broad: true });
-        }
-        case RoomMessage.muteBoard: {
-          globalStore.showToast({
-            type: 'notice',
-            message: t('toast.teacher_cancel_whiteboard'),
-          });
-          return await this.updateLocalMe({ grantBoard: 0, broad: true });
-        }
-        case RoomMessage.unmuteAudio: {
-          return await this.updateLocalMe({ audio: 1, broad: true });
-        }
-        case RoomMessage.unmuteVideo: {
-          return await this.updateLocalMe({ video: 1, broad: true });
-        }
-        case RoomMessage.unmuteChat: {
-          return await this.updateLocalMe({ chat: 1, broad: true });
-        }
-        case RoomMessage.unmuteBoard: {
-          globalStore.showToast({
-            type: 'notice',
-            message: t('toast.teacher_accept_whiteboard')
-          });
-          return await this.updateLocalMe({ grantBoard: 1, broad: true});
-        }
-        case RoomMessage.acceptCoVideo: {
-          globalStore.showToast({
-            type: 'co-video',
-            message: t("toast.teacher_accept_co_video")
-          });
-          await this.updateLocalMe({broad: true});
-          console.log("setchannelAttrs succes")
-          return;
-        }
+        // @deprecate
+        // case RoomMessage.muteChat: {
+        //   return await this.updateLocalMe({ chat: 0, broad: true });
+        // }
+        // case RoomMessage.muteAudio: {
+        //   return await this.updateLocalMe({ audio: 0, broad: true });
+        // }
+        // case RoomMessage.muteVideo: {
+        //   return await this.updateLocalMe({ video: 0, broad: true });
+        // }
+        // case RoomMessage.muteBoard: {
+        //   globalStore.showToast({
+        //     type: 'notice',
+        //     message: t('toast.teacher_cancel_whiteboard'),
+        //   });
+        //   return await this.updateLocalMe({ grantBoard: 0, broad: true });
+        // }
+        // case RoomMessage.unmuteAudio: {
+        //   return await this.updateLocalMe({ audio: 1, broad: true });
+        // }
+        // case RoomMessage.unmuteVideo: {
+        //   return await this.updateLocalMe({ video: 1, broad: true });
+        // }
+        // case RoomMessage.unmuteChat: {
+        //   return await this.updateLocalMe({ chat: 1, broad: true });
+        // }
+        // case RoomMessage.unmuteBoard: {
+        //   globalStore.showToast({
+        //     type: 'notice',
+        //     message: t('toast.teacher_accept_whiteboard')
+        //   });
+        //   return await this.updateLocalMe({ grantBoard: 1, broad: true});
+        // }
+        // case RoomMessage.acceptCoVideo: {
+        //   globalStore.showToast({
+        //     type: 'co-video',
+        //     message: t("toast.teacher_accept_co_video")
+        //   });
+        //   await this.updateLocalMe({broad: true});
+        //   console.log("setchannelAttrs succes")
+        //   return;
+        // }
         case RoomMessage.rejectCoVideo: {
           globalStore.showToast({
             type: 'co-video',
@@ -473,19 +459,21 @@ export class RoomStore {
           });
           return;
         }
-        case RoomMessage.cancelCoVideo: {
-          globalStore.showToast({
-            type: 'co-video',
-            message: t("toast.teacher_cancel_co_video")
-          });
-          return;
-        }
+        // @deprecate
+        // case RoomMessage.cancelCoVideo: {
+        //   globalStore.showToast({
+        //     type: 'co-video',
+        //     message: t("toast.teacher_cancel_co_video")
+        //   });
+        //   return;
+        // }
         default:
       }
       return;
     }
 
     // when i m teacher & received student message
+    // 当自己是老师的时候，处理学生的消息
     if (this.isTeacher(myUid) && this.isStudent(peerId)) {
       switch (cmd) {
         case RoomMessage.applyCoVideo: {
@@ -498,7 +486,7 @@ export class RoomStore {
           // if (peerId) {
           const applyUid = +peerId
 
-          if (typeof applyUid && !isNaN(applyUid)) {
+          if (typeof applyUid === 'number' && !isNaN(applyUid)) {
             this.applyLock = +peerId;
             console.log("applyUid: ", this.applyLock);
             this.state = {
@@ -513,16 +501,18 @@ export class RoomStore {
             return
           }
         }
-        case RoomMessage.cancelCoVideo: {
-          // WARN: LOCK
-          await roomStore.updateCourseLinkUid(0)
-          console.log("cancelCoVideo updateLinkUid, 0")
-          globalStore.showToast({
-            type: 'co-video',
-            message: t('toast.student_cancel_co_video')
-          });
-          return;
-        }
+
+        // @deprecate
+        // case RoomMessage.cancelCoVideo: {
+        //   // WARN: LOCK
+        //   await roomStore.updateCourseLinkUid(0)
+        //   console.log("cancelCoVideo updateLinkUid, 0")
+        //   globalStore.showToast({
+        //     type: 'co-video',
+        //     message: t('toast.student_cancel_co_video')
+        //   });
+        //   return;
+        // }
         default:
       }
       return;
@@ -531,7 +521,7 @@ export class RoomStore {
 
   async mute(uid: string, type: string) {
     const me = this.state.me;
-    if (me.uid === `${uid}`) {
+    if (`${me.uid}` === `${uid}`) {
       if (type === 'audio') {
         await this.updateLocalMe({
           audio: 0,
@@ -552,7 +542,7 @@ export class RoomStore {
       }
       // if (type === 'grantBoard') {
       //   await this.updateLocal({
-      //     grant_board: 0
+      //     grantBoard: 0
       //   });
       // }
     }
@@ -574,7 +564,7 @@ export class RoomStore {
 
   async unmute(uid: string, type: string) {
     const me = this.state.me;
-    if (me.uid === `${uid}`) {
+    if (`${me.uid}` === `${uid}`) {
       if (type === 'audio') {
         await this.updateLocalMe({
           audio: 1,
@@ -595,7 +585,7 @@ export class RoomStore {
       }
       // if (type === 'grantBoard') {
       //   await this.updateLocal({
-      //     grant_board: 1
+      //     grantBoard: 1
       //   });
       // }
     }
@@ -636,9 +626,9 @@ export class RoomStore {
           audio: it.enableAudio,
           chat: it.enableChat,
           grantBoard: it.grantBoard,
-          boardId: it.boardId,
-          // sharedId: it.screenId,
+          userId: it.userId,
           coVideo: it.coVideo,
+          screenId: it.screenId,
         });
       }, Map<string, AgoraUser>());
 
@@ -646,6 +636,14 @@ export class RoomStore {
 
       await this.rtmClient.login(`${me.uid}`, me.rtmToken)
       await this.rtmClient.join(course.rid)
+      if (me.coVideo) {
+        await this.rtmClient.notifyMessage({
+          cmd: ChatCmdType.update,
+          data: {
+            operate: RoomMessage.acceptCoVideo
+          }
+        })
+      }
       this.state = {
         ...this.state,
         rtm: {
@@ -660,12 +658,15 @@ export class RoomStore {
           roomName: course.roomName,
           courseState: course.courseState,
           muteChat: course.muteAllChat,
+          recordId: `${course.recordId}`,
           isRecording: course.isRecording,
           recordingTime: course.recordingTime,
           lockBoard: course.lockBoard,
-          boardId: course.boardId,
-          boardToken: course.boardToken,
-          teacherId: course.teacherId,
+          boardId: `${course.boardId}`,
+          boardToken: `${course.boardToken}`,
+          teacherId: `${course.teacherId}`,
+          screenId: `${me.screenId}`,
+          screenToken: `${me.screenToken}`,
         },
         me: {
           ...this.state.me,
@@ -681,6 +682,7 @@ export class RoomStore {
           chat: me.enableChat,
           video: me.enableVideo,
           audio: me.enableAudio,
+          userId: me.userId,
         },
         users,
         appID,
@@ -688,18 +690,12 @@ export class RoomStore {
 
       console.log(">>>>>> res: ", res, " course", course.teacherId)
       this.commit(this.state)
-      // this.updateLocal()
-      // this.updateLocal()
     } catch(err) {
       if (this.rtmClient._logged) {
         await this.rtmClient.logout();
       }
       throw err;
     }
-  }
-
-  async updateToRoom(payload: any) {
-    return await eduApi.updateRoom(payload)
   }
 
   exactRoomAttrsFrom({json}: any) {
@@ -712,27 +708,6 @@ export class RoomStore {
       me,
       users
     }
-  }
-
-  async updateRoomAttrs(payload: any, local: boolean = false) {
-    const {
-      course, me, users
-    } = this.exactRoomAttrsFrom(payload);
-
-
-    const finalState = {
-      ...this.state,
-      course,
-      me,
-      users
-    }
-
-    if (local) {
-      await this.updateToRoom(payload)
-    }
-
-    this.state = finalState
-    this.commit(this.state)
   }
 
   setRTCJoined(joined: boolean) {
@@ -757,14 +732,6 @@ export class RoomStore {
     // })
     // this.applyLock = linkId;
     // return res;
-  }
-
-  async updateWhiteboardUid(boardId: string) {
-    let res = await this.updateLocal({
-      boardId
-    });
-    console.log("[update whiteboard uuid] res", boardId);
-    return res;
   }
 
   async deleteKey(uid: number) {
@@ -802,8 +769,123 @@ export class RoomStore {
     return newCourse;
   }
 
+  async fetchCourse() {
+    let course = await eduApi.getCourseState(this.state.course.roomId)
+    return await this.updateCourse({...course, broad: false})
+  }
+
+  async fetchRoomState() {
+    let {users, room} = await eduApi.getRoomState(this.state.course.roomId)
+    return await this.updateRoomState({users, room, broad: false})
+  }
+
+  async updateRoomState(params: {users: Map<string, AgoraUser>, room: Partial<ClassState>} & NotifyFlag) {
+    const {broad, users, room} = params
+
+    const me = users.get(this.state.me.uid)
+
+    const newMe = me
+
+    this.state = {
+      ...this.state,
+      course: {
+        ...this.state.course,
+        ...room,
+      },
+      me: {
+        ...this.state.me,
+        ...newMe
+      },
+      users,
+    }
+    this.commit(this.state)
+  }
+
+  resolveUserAttrsToOperate(params: Partial<AgoraUser>): any {
+    const keys = ['video', 'audio', 'chat', 'grantBoard', 'coVideo']
+    for (let key of keys) {
+      if (params.hasOwnProperty(key)) {
+        let value = -1
+        let stateValue = get(params, key, 0)
+        let stateKey = key;
+        if (key === 'video') {
+          value = stateValue ? RoomMessage.unmuteVideo : RoomMessage.muteVideo
+        } else if (key === 'audio') {
+          value = stateValue ? RoomMessage.unmuteAudio : RoomMessage.muteAudio
+        } else if (key === 'chat') {
+          value = stateValue ? RoomMessage.unmuteChat : RoomMessage.muteChat
+        } else if (key === 'grantBoard') {
+          value = stateValue ? RoomMessage.unmuteBoard : RoomMessage.muteBoard
+        } else if (key === 'coVideo') {
+          value = stateValue ? RoomMessage.acceptCoVideo : RoomMessage.cancelCoVideo
+        }
+        return {
+          key: stateKey,
+          stateValue,
+          value
+        }
+      }
+    }
+  }
+
+  async updateLocalMe(params: Partial<Me & NotifyFlag>) {
+    const {broad, ...meParams} = params
+    const newMe = this.compositeMe(meParams)
+
+    const newMeAttrs = {
+      uid: newMe.uid,
+      account: newMe.account,
+      role: newMe.role,
+      video: newMe.video,
+      audio: newMe.audio,
+      chat: newMe.chat,
+      grantBoard: newMe.grantBoard,
+      coVideo: newMe.coVideo,
+      userId: newMe.userId,
+      screenId: newMe.screenId,
+    }
+
+    const userAttrsParams: UserAttrsParams = {
+      userId: newMeAttrs.userId as string,
+      enableChat: newMeAttrs.chat as number,
+      enableAudio: newMeAttrs.audio as number,
+      enableVideo: newMeAttrs.video as number,
+      grantBoard: newMeAttrs.grantBoard as number,
+      coVideo: newMeAttrs.coVideo as number
+    }
+
+    if (broad) {
+      await this.updateRoomUser({user: userAttrsParams})
+    }
+
+    this.state = {
+      ...this.state,
+      me: {
+        ...this.state.me,
+        ...newMeAttrs,
+      },
+      users: this.state.users.set(`${this.state.me.uid}`, newMeAttrs)
+    }
+    this.commit(this.state)
+
+    const {value} = this.resolveUserAttrsToOperate(newMeAttrs)
+
+    if (broad) {
+      await this.rtmClient.notifyMessage({
+        cmd: ChatCmdType.update,
+        data: {
+          operate: value,
+        }
+      })
+    }
+  }
+
+  async updateRoomUser({user}: {user: UserAttrsParams}) {
+    return await eduApi.updateRoomUser({user})
+  }
+
   async updateUserBy(uid: string, params: Partial<AgoraUser & NotifyFlag>) {
-    const {broad, ...userParams} = params
+    const {broad = true, ...userParams} = params
     const prevUser = this.state.users.get(`${uid}`)
     
     const newUserAttrs: Partial<AgoraUser> = {
@@ -819,82 +901,70 @@ export class RoomStore {
       }
     }
 
+    const userAttrsParams: UserAttrsParams = {
+      userId: newUserAttrs.userId as string,
+      enableChat: newUserAttrs.chat as number,
+      enableAudio: newUserAttrs.audio as number,
+      enableVideo: newUserAttrs.video as number,
+      grantBoard: newUserAttrs.grantBoard as number,
+      coVideo: newUserAttrs.coVideo as number
+    }
+
+    console.log("newUserAttrs: ", newUserAttrs, userAttrsParams)
+
     if (broad) {
-      await this.updateToRoom({users: newUserAttrs})
+      await this.updateRoomUser({user: userAttrsParams})
     }
 
     this.state = {
       ...this.state,
-      users: this.state.users.set(`${newUserAttrs.uid}`, newUserAttrs as AgoraUser)
+      users: this.state.users.set(`${uid}`, newUserAttrs as AgoraUser)
     }
     this.commit(this.state)
-  }
 
-  async fetchCourse() {
-    let course = await eduApi.getCourseState(this.state.course.roomId)
-    return await this.updateCourse({...course, broad: false})
-  }
-
-  async updateLocalMe(params: Partial<Me & NotifyFlag>) {
-    const {broad, ...meParams} = params
-    const newMe = this.compositeMe(meParams)
-
-    const newMeParams = {
-      uid: newMe.uid,
-      account: newMe.account,
-      role: newMe.role,
-      video: newMe.video,
-      audio: newMe.audio,
-      chat: newMe.chat,
-      boardId: newMe.boardId,
-      grantBoard: newMe.grantBoard,
-      coVideo: newMe.coVideo,
-    }
+    const {value} = this.resolveUserAttrsToOperate(newUserAttrs)
 
     if (broad) {
-      await this.updateToRoom({users: [newMeParams]})
+      await this.rtmClient.notifyMessage({
+        cmd: ChatCmdType.update,
+        data: {
+          operate: value,
+        }
+      })
     }
+  }
 
-    this.state = {
-      ...this.state,
-      me: {
-        ...this.state.me,
-        ...newMeParams,
-      },
-      users: this.state.users.set(`${this.state.me.uid}`, newMeParams)
+  resolveCourseAttrsToOperate(params: Partial<ClassState>): any {
+    const keys = ['lockBoard', 'courseState', 'muteChat']
+    for (let key of keys) {
+      if (params.hasOwnProperty(key)) {
+        let value = -1
+        let stateValue = get(params, key, 0)
+        let stateKey = key;
+        if (key === 'lockBoard') {
+          value = stateValue ? RoomMessage.lockBoard : RoomMessage.unlockBoard
+        } else if (key === 'courseState') {
+          value = stateValue ? RoomMessage.startCourse : RoomMessage.endCourse
+        } else if (key === 'muteChat') {
+          value = stateValue ? RoomMessage.muteAllChat : RoomMessage.unmuteAllChat
+          stateKey = 'muteAllChat'
+        }
+        return {
+          key: stateKey,
+          stateValue,
+          value
+        }
+      }
     }
-    this.commit(this.state)
   }
 
   async updateCourse(params: Partial<ClassState & NotifyFlag>) {
     const {broad = true, ...courseParams} = params
 
-    const keys = ['lockBoard', 'courseState', 'muteChat']
-    const resolveResource = (params: Partial<ClassState>): any => {
-      for (let key of keys) {
-        if (courseParams.hasOwnProperty(key)) {
-          let value = -1
-          let stateValue = get(params, key, 0)
-          if (key === 'lockBoard') {
-            value = stateValue ? RoomMessage.lockBoard : RoomMessage.unlockBoard
-          } else if (key === 'courseState') {
-            value = stateValue ? RoomMessage.startCourse : RoomMessage.endCourse
-          } else if (key === 'muteChat') {
-            value = stateValue ? RoomMessage.muteAllChat : RoomMessage.unmuteAllChat
-          }
-          return {
-            key,
-            stateValue,
-            value
-          }
-        }
-      }
-    }
-
-    const {key, stateValue, value}: any = resolveResource(courseParams)
+    const {key, stateValue, value}: any = this.resolveCourseAttrsToOperate(courseParams)
 
     if (broad) {
-      await eduApi.updateRoom({
+      await eduApi.updateCourse({
         room: {
           [`${key}`]: stateValue
         }
@@ -911,8 +981,7 @@ export class RoomStore {
         cmd: ChatCmdType.course,
         data: {
           operate: value,
-        },
-        enableHistoricalMessaging: false
+        }
       })
       return
     }
@@ -965,16 +1034,119 @@ export class RoomStore {
     }
   }
 
-  setScreenShare(shared: boolean) {
-    this.state = {
-      ...this.state,
-      rtc: {
-        ...this.state.rtc,
-        shared,
+  async startWebScreenShare() {
+    const webClient = this.rtcClient as AgoraWebClient
+    try {
+      const {screenToken} = await eduApi.refreshToken();
+      const {screenId, rid} = this.state.course
+      const appId = this.state.appID
+      await webClient.startScreenShare({
+        uid: +screenId,
+        token: screenToken,
+        channel: rid,
+        appId
+      })
+      // add screen client listener
+      // 监听屏幕共享主要的事件
+      webClient.shareClient.on('onTokenPrivilegeWillExpire', (evt: any) => {
+        // WARN: IF YOU ENABLED APP CERTIFICATE, PLEASE SIGN YOUR TOKEN IN YOUR SERVER SIDE AND OBTAIN IT FROM YOUR OWN TRUSTED SERVER API
+        const newToken = '';
+        webClient.shareClient.renewToken(newToken);
+      });
+      webClient.shareClient.on('onTokenPrivilegeDidExpire', (evt: any) => {
+        // WARN: IF YOU ENABLED APP CERTIFICATE, PLEASE SIGN YOUR TOKEN IN YOUR SERVER SIDE AND OBTAIN IT FROM YOUR OWN TRUSTED SERVER API
+        const newToken = '';
+        webClient.shareClient.renewToken(newToken);
+      });
+      webClient.shareClient.on('stopScreenSharing', (evt: any) => {
+        console.log('stop screen share', evt);
+        this.stopWebScreenShare().then(() => {
+          globalStore.showToast({
+            message: t('toast.canceled_screen_share'),
+            type: 'notice'
+          });
+        }).catch(console.warn).finally(() => {
+          console.log('[agora-web] stop share');
+        })
+      })
+    } catch(err) {
+      if (webClient.shareClient) {
+        webClient.shareClient.off('onTokenPrivilegeWillExpire', (evt: any) => {})
+        webClient.shareClient.off('onTokenPrivilegeDidExpire', (evt: any) => {})
+        webClient.shareClient.off('stopScreenSharing', (evt: any) => {})
       }
+      if (err.type === 'error' && err.msg === 'NotAllowedError') {
+        globalStore.showToast({
+          message: t('toast.canceled_screen_share'),
+          type: 'notice'
+        });
+      }
+      if (err.type === 'error' && err.msg === 'PERMISSION_DENIED') {
+        globalStore.showToast({
+          message: t('toast.screen_sharing_failed', {reason: err.msg}),
+          type: 'notice'
+        });
+      }
+      throw err
     }
-    this.commit(this.state);
   }
+
+  async stopWebScreenShare() {
+    const webClient = this.rtcClient as AgoraWebClient
+    if (webClient.shared) {
+      await webClient.stopScreenShare()
+      this.removeLocalSharedStream();
+    }
+  }
+
+  // WARN: only work in electron environment
+  // 仅用于electron运行环境
+  async startNativeScreenShare() {
+    const rtcClient = this.rtcClient;
+    globalStore.setNativeWindowInfo({
+      visible: true,
+      items: (rtcClient as AgoraElectronClient).getScreenShareWindows()
+    })
+  }
+
+  async startScreenShare() {
+    if (platform === 'electron') {
+      await this.startNativeScreenShare()
+    }
+
+    if (platform === 'web') {
+      await this.startWebScreenShare()
+    }
+  }
+
+  async stopNativeScreenShare() {
+    const nativeClient = this.rtcClient as AgoraElectronClient;
+    if (nativeClient.shared) {
+      await nativeClient.stopScreenShare();
+    }
+  }
+
+
+  async stopScreenShare() {
+    if (platform === 'web') {
+      await this.stopWebScreenShare()
+    }
+
+    if (platform === 'electron') {
+      await this.stopNativeScreenShare()
+    }
+  }
+
+  // setScreenShare(shared: boolean) {
+  //   this.state = {
+  //     ...this.state,
+  //     rtc: {
+  //       ...this.state.rtc,
+  //       shared,
+  //     }
+  //   }
+  //   this.commit(this.state);
+  // }
 }
 
 export const roomStore = new RoomStore();

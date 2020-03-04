@@ -84,7 +84,7 @@ export default function Control({
       const me = roomState.me;
       if (lock.current || !me.uid) return;
   
-      if (whiteboard.state.recording) {
+      if (roomState.course.isRecording) {
         if (!canStop()) return;
         let mediaUrl = await whiteboard.stopRecording();
         globalStore.showToast({
@@ -94,10 +94,6 @@ export default function Control({
         if (whiteboard.state.endTime 
           && whiteboard.state.startTime) {
           const {endTime, startTime, roomUUID} = whiteboard.clearRecording();
-          // await roomStore.rtmClient.sendChannelMessage({
-          //   account: me.account,
-          //   recordId: 'fakerecordId',
-          // })
           const message = {
             account: me.account,
             id: me.uid,
@@ -155,16 +151,28 @@ export default function Control({
             <div className="menu-split" style={{ marginLeft: '7px', marginRight: '7px' }}></div>
           </> : null
         }
-        {role === 1 ?
+        {+role === 1 ?
           <>
             <ControlItem
-              name={whiteboard.state.recording ? 'stop_recording' : 'recording'}
+              name={roomStore.state.course.isRecording ? 'stop_recording' : 'recording'}
               onClick={onRecordButtonClick}
               active={false}
             />
             <ControlItem
               name={sharing ? 'quit_screen_sharing' : 'screen_sharing'}
-              onClick={onClick}
+              onClick={(evt: any) => {
+                if (sharing) {
+                  roomStore.stopScreenShare()
+                  .then(() => {
+                    console.log("stop screen share")
+                  }).catch(console.warn)
+                } else {
+                  roomStore.startScreenShare()
+                  .then(() => {
+                    console.log("start screen share")
+                  }).catch(console.warn)
+                }
+              }}
               active={false}
               text={sharing ? 'stop sharing' : ''}
             />

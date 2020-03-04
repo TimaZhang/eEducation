@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { SHARE_ID } from '../utils/agora-rtc-client';
 import _ from 'lodash';
 import { roomStore } from '../stores/room';
 import { useRoomState } from '../containers/root-container';
 
-type StreamValue ={
+type StreamValue = {
   teacher: any
   students: any[]
   sharedStream: any
@@ -23,6 +22,7 @@ export default function useStream () {
     const teacherInfo = roomStore.state.users.get(`${course.teacherId}`);
     if (!teacherInfo) return;
 
+    // 当本地流为老师时
     if (+me.uid === +course.teacherId) {
       return {
         ...roomState.rtc.localStream,
@@ -33,9 +33,11 @@ export default function useStream () {
       }
     } else {
       // when peer teacher is online
+      // 当远端流为老师时
       const teacherUid = roomState.rtc.users.get(+course.teacherId);
       if(!teacherUid) return null;
       // when peer teacher stream is found
+      // 当找到老师的音视频流时
       const remoteTeacherStream = roomState.rtc.remoteStreams.get(`${teacherUid}`);
       if (remoteTeacherStream) {
         return {
@@ -53,25 +55,41 @@ export default function useStream () {
       }
     }
   }, [
-    course,
-    me.uid,
+    JSON.stringify(
+      [
+        course.teacherId,
+        me.uid
+      ]
+    ),
+    roomState.users,
     roomState.rtc.users,
     roomState.rtc.remoteStreams,
     roomState.rtc.localStream
   ]);
+
+  const screenId = useMemo(() => {
+    const teacher = roomState.users.get(`${course.teacherId}`)
+    let id = ''
+    if (teacher) {
+      id = teacher.screenId
+    }
+    return id
+  }, [course.teacherId, roomState.users])
 
   const students = useMemo(() => {
     const userAttrs = roomStore.state.users;
     if (!me.uid || userAttrs.count() === 0) return [];
     const teacherUid = course.teacherId;
     const peerUsers = roomState.rtc.users;
-    // exclude teacher and me
-    let studentIds = peerUsers.filter((it: number) => it !== +teacherUid && it !== +me.uid && it !== SHARE_ID);
+    // exclude teacher and me and screenId
+    // 排除老师，屏幕共享，和自己的uid
+    let studentIds = peerUsers.filter((it: number) => it !== +teacherUid && it !== +me.uid && it !== +screenId);
 
     const studentStreams: any[] = [];
     const myAttr = userAttrs.get(`${me.uid}`);
 
     // when i m student
+    // 当自己是学生流时
     if (+me.role === 2) {
       if (myAttr && roomState.rtc.localStream) {
         const _tmpStream = {
@@ -86,6 +104,7 @@ export default function useStream () {
     }
 
     // capture all remote streams
+    // 所有远端的学生流
     for (let studentId of studentIds) {
       const studentAttr = userAttrs.get(`${studentId}`);
       const stream = roomState.rtc.remoteStreams.get(`${studentId}`);
@@ -110,15 +129,20 @@ export default function useStream () {
     }
     return studentStreams;
   }, [
-    course,
-    me.uid,
+    JSON.stringify(
+      [
+        course.teacherId,
+        screenId,
+        me.uid
+      ]
+    ),
+    roomState.users,
     roomState.rtc.users,
     roomState.rtc.remoteStreams,
     roomState.rtc.localStream
   ]);
 
   const sharedStream = useMemo(() => {
-    const sharedUid = SHARE_ID;
     if (roomState.rtc.localSharedStream) {
       const _tmpStream = {
         ...roomState.rtc.localSharedStream,
@@ -128,7 +152,7 @@ export default function useStream () {
       return _tmpStream;
     }
 
-    const remoteStream = roomState.rtc.remoteStreams.get(`${sharedUid}`);
+    const remoteStream = roomState.rtc.remoteStreams.get(`${screenId}`);
 
     if (remoteStream) {
       const _tmpStream = {
@@ -140,7 +164,11 @@ export default function useStream () {
     }
 
     return null;
-  }, [roomState.rtc.remoteStreams, roomState.rtc.localSharedStream]);
+  }, [
+    screenId,
+    roomState.rtc.remoteStreams,
+    roomState.rtc.localSharedStream
+  ]);
 
   // TODO: need deprecate
   const currentHost = useMemo(() => {
@@ -197,16 +225,12 @@ export default function useStream () {
     currentHost: currentHost,
     onPlayerClick: async (type: string, streamID: number, uid: string) => {
 
-      console.log(" click player ", type, streamID, uid);
       const me = roomStore.state.me;
       if (!roomStore.state.rtm.joined || !me.uid) return console.warn("please confirm joined rtm");
       const targetUser = roomStore.state.users.get(`${uid}`);
-      console.log("targetUser : ", targetUser);
       if (!targetUser) return;
 
       const targetUid = targetUser.uid;
-
-      console.log(" click >>> targetUid: ", targetUid, " type: ", type, " streamID: ", streamID, " uid: ", uid);
 
       const video = Boolean(targetUser.video);
       const audio = Boolean(targetUser.audio);
@@ -222,7 +246,6 @@ export default function useStream () {
       }
 
       if (type === 'audio') {
-        console.log("audio roomstore#mute/unmute, ", audio, targetUid)
         if (audio) {
           await roomStore.mute(targetUid, 'audio');
         } else {

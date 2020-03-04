@@ -2,6 +2,9 @@ import EventEmitter from 'events';
 import AgoraRTC from 'agora-rtc-sdk';
 import { roomStore, RoomStore } from '../stores/room';
 import { isEmpty } from 'lodash';
+import { t } from '../i18n';
+import { globalStore } from '../stores/global';
+import { AgoraStream } from './types';
 
 if (process.env.REACT_APP_AGORA_LOG !== 'true') {
   AgoraRTC.Logger.setLogLevel(AgoraRTC.Logger.NONE);
@@ -272,7 +275,7 @@ class AgoraRTCClient {
     } catch (err) {
       throw err;
     } finally {
-      await this.destroy();
+      this.destroy();
     }
   }
 
@@ -423,30 +426,41 @@ export default class AgoraWebClient {
     this.published = false;
   }
 
-  async startScreenShare (token: string) {
+  async startScreenShare ({
+    uid, channel, token, appId
+  }: {
+    uid: number,
+    channel: string,
+    token: string,
+    appId: string
+  }) {
     this.shareClient = new AgoraRTCClient();
-    await this.shareClient.createLocalStream({
-      video: false,
-      audio: false,
-      screen: true,
-      screenAudio: true,
-      streamID: SHARE_ID,
-      microphoneId: '',
-      cameraId: ''
-    })
-    await this.shareClient.createClient(APP_ID);
-    await this.shareClient.join(SHARE_ID, this.channel, token);
-    await this.shareClient.publish();
-    this.shared = true;
+    try {
+      await this.shareClient.createLocalStream({
+        video: false,
+        audio: false,
+        screen: true,
+        screenAudio: true,
+        streamID: uid,
+        microphoneId: '',
+        cameraId: ''
+      })
+      await this.shareClient.createClient(appId);
+      await this.shareClient.join(uid, channel, token);
+      await this.shareClient.publish();
+      this.shared = true;
+    } catch(err) {
+      throw err
+    }
   }
 
   async stopScreenShare () {
     await this.shareClient.unpublish();
     await this.shareClient.leave();
-    await this.shareClient.destroy();
-    await this.shareClient.destroyClient();
-    roomStore.removeLocalSharedStream();
+    this.shareClient.destroy();
+    this.shareClient.destroyClient();
     this.shared = false;
+    this.shareClient = undefined
   }
 
   async exit () {
@@ -466,8 +480,8 @@ export default class AgoraWebClient {
     }
     if (this.shareClient) {
       try {
-        await this.shareClient.destroy();
-        await this.shareClient.destroyClient();
+        this.shareClient.destroy();
+        this.shareClient.destroyClient();
       } catch(err) {
         errors.push({'shareClient': err});
       }

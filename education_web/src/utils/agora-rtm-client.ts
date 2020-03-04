@@ -44,7 +44,7 @@ export interface ChannelBodyParams {
 export interface NotifyMessageParams {
   cmd: ChatCmdType
   data: ChatMessage | UserMessage | CourseMessage
-  enableHistoricalMessaging: boolean
+  enableHistoricalMessaging?: boolean
 }
 
 export interface CourseMessage {
@@ -54,7 +54,9 @@ export interface CourseMessage {
     RoomMessage.muteAllChat |
     RoomMessage.unmuteAllChat |
     RoomMessage.lockBoard |
-    RoomMessage.unlockBoard
+    RoomMessage.unlockBoard |
+    RoomMessage.acceptCoVideo |
+    RoomMessage.cancelCoVideo 
 }
 
 export interface ChatMessage {

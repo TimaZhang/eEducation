@@ -172,6 +172,10 @@ export const RootProvider: React.FC<any> = ({children}) => {
       // user message
       // 用户消息
       if (cmd === ChatCmdType.update) {
+        roomStore.fetchRoomState()
+          .then(() => {
+            console.log('fetchRoomState')
+          }).catch(console.warn)
         // roomStore.updateCourse()
         // roomStore.updateChannelMessage
         // roomStore.updateUserBy()

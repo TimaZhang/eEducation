@@ -71,14 +71,19 @@ const DialogContainer = () => {
   const onClose = (type: string) => {
     if (type === 'exitRoom') {
       globalStore.removeDialog();
-      // history.push('/');
     }
     else if (type === 'apply') {
+      // p2p message rejectCoVideo
+      // 老师拒绝学生连麦申请
       roomStore.rtmClient.sendPeerMessage(
         `${roomStore.applyUid}`, {cmd: RoomMessage.rejectCoVideo}
       ).then(() => {
+        roomStore.applyLock = 0
+        globalStore.removeNotice();
         globalStore.removeDialog();
-      }).catch(console.warn);
+      }).catch((err) => {
+        console.warn(err)
+      })
     }
   }
 
@@ -88,13 +93,13 @@ const DialogContainer = () => {
       history.push('/');
     }
     else if (type === 'apply') {
+      // p2p message accept coVideo
+      // 老师同意学生连麦申请
       Promise.all([
-        roomStore.rtmClient.sendPeerMessage(
-          `${roomStore.applyUid}`, {cmd: RoomMessage.acceptCoVideo}
-        ),
-        roomStore.updateCourseLinkUid(roomStore.applyUid)
+        roomStore.updateUserBy(`${roomStore.applyUid}`, {
+          coVideo: 1
+        })
       ]).then(() => {
-        console.log("applyUid");
         globalStore.removeNotice();
         globalStore.removeDialog();
       }).catch(console.warn);

@@ -6,7 +6,7 @@ import ChatBoard from '../../components/chat/board';
 import MediaBoard from '../../components/mediaboard';
 import useStream from '../../hooks/use-streams';
 import useChatText from '../../hooks/use-chat-text';
-import { RoomMessage } from '../../utils/agora-rtm-client';
+import { RoomMessage, ChatCmdType } from '../../utils/agora-rtm-client';
 import { AgoraElectronClient } from '../../utils/agora-electron-client';
 import AgoraWebClient from '../../utils/agora-rtc-client';
 import { useRoomState } from '../../containers/root-container';
@@ -48,7 +48,7 @@ export default function BigClass() {
     if (type === 'hands_up') {
       if (roomStore.state.course.teacherId) {
         rtmLock.current = true;
-        roomStore.rtmClient.sendPeerMessage(roomStore.state.course.teacherId,
+        roomStore.rtmClient.sendPeerMessage(`${roomStore.state.course.teacherId}`,
           {cmd: RoomMessage.applyCoVideo})
           .then((result: any) => {
             console.log("peerMessage result ", result);
@@ -63,7 +63,7 @@ export default function BigClass() {
     if (type === 'hands_up_end') {
       if (roomStore.state.course.teacherId) {
         rtmLock.current = true;
-        roomStore.rtmClient.sendPeerMessage(roomStore.state.course.teacherId,
+        roomStore.rtmClient.sendPeerMessage(`${roomStore.state.course.teacherId}`,
           {cmd: RoomMessage.cancelCoVideo})
           .then((result: any) => {
             console.log("peerMessage result ", result);
@@ -115,8 +115,11 @@ export default function BigClass() {
         closeLock.current = true;
         rtmLock.current = true;
         Promise.all([
-          rtmClient.sendPeerMessage(`${teacherUid}`,{
-            cmd: RoomMessage.cancelCoVideo
+          rtmClient.notifyMessage({
+            cmd: ChatCmdType.update,
+            data: {
+              operate: RoomMessage.cancelCoVideo,
+            }
           }),
           quitClient
         ]).then(() => {
