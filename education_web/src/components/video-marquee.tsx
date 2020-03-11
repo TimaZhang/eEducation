@@ -13,7 +13,6 @@ const showScrollbar = () => {
     if (clientWidth && videoMarqueeMark) {
       const videoMarqueeWidth = videoMarqueeMark.clientWidth;
       const width: number = clientWidth * marqueeLength;
-      // console.log("[video-marquee] videoMarqueeWidth: ", videoMarqueeWidth, ", width: ", width);
       if (videoMarqueeWidth <= width) {
         return true;
       }

@@ -105,7 +105,7 @@ const DialogContainer = () => {
       // p2p message accept coVideo
       // 老师同意学生连麦申请
       Promise.all([
-        roomStore.updateApplyUserBy(roomStore.state.applyUser, {
+        roomStore.updateCoVideoUserBy(roomStore.state.applyUser, {
           coVideo: 1
         })
       ]).then(() => {

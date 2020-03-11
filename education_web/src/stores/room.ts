@@ -106,7 +106,7 @@ export type RtmState = {
   memberCount: number
 }
 
-export type ApplyUser = {
+export type UserParams = {
   uid: string,
   userId: string,
   account: string,
@@ -120,7 +120,7 @@ export type RoomState = {
   me: Me
   users: Map<string, AgoraUser>
   course: ClassState
-  applyUser: ApplyUser
+  applyUser: UserParams
   rtc: RtcState
   rtm: RtmState
   mediaDevice: MediaDeviceState
@@ -407,11 +407,9 @@ export class RoomStore {
 
   async handlePeerMessage(body: any, peerId: string) {
     const {cmd, data: {userId, uid, operate, account}} = body
-    // console.log("cmd ", cmd, "userId ", userId, " uid ", uid, " operate ", operate, " account ", account);
 
     if (!peerId) return console.warn('state is not assigned');
     const myUid = `${this.state.me.uid}`;
-    // console.log("Teacher: ", this.isTeacher(myUid), ", peerId: ", this.isStudent(peerId), " myUid ", myUid, " peerId ", peerId, " userId ", userId);
     // student follow teacher peer message
     // 当对端是老师的时候
     if (!this.isTeacher(myUid) && this.isTeacher(peerId)) {
@@ -574,10 +572,7 @@ export class RoomStore {
         });
       }, Map<string, AgoraUser>());
 
-      console.log(">> res", course, me, users, appID)
-
       await this.rtmClient.login(appID, `${me.uid}`, me.rtmToken)
-      console.log("login ", appID, course.channelName, me.rtmToken)
       await this.rtmClient.join(course.rid)
       if (me.coVideo) {
         await this.rtmClient.notifyMessage({
@@ -635,7 +630,6 @@ export class RoomStore {
         users,
         appID,
       }
-      console.log(">>>>>> res: ", res, " course", course.teacherId)
       this.commit(this.state)
     } catch(err) {
       if (this.rtmClient._logged) {
@@ -710,14 +704,27 @@ export class RoomStore {
   }
 
   async fetchRoomState() {
-    let {users, room} = await eduApi.getRoomState(this.state.course.roomId)
-    return await this.updateRoomState({users, room, broad: false})
+    let {usersMap, room} = await eduApi.getRoomState(this.state.course.roomId)
+    return await this.updateRoomState({usersMap, room, broad: false})
   }
 
-  async updateRoomState(params: {users: Map<string, AgoraUser>, room: Partial<ClassState>} & NotifyFlag) {
-    const {broad, users, room} = params
+  async updateRoomState(params: {usersMap: Map<string, AgoraUser>, room: Partial<ClassState>} & NotifyFlag) {
+    const {broad, usersMap, room} = params
 
-    const me = users.get(`${this.state.me.uid}`)
+    const me = usersMap.get(`${this.state.me.uid}`)
+
+    const teacherId = room.teacherId as string
+
+    let coVideoUids = this.state.course.coVideoUids
+
+    if (usersMap.count()) {
+      const ids: any[] = []
+      const usersJson = usersMap.toJSON()
+      for (let key of Object.keys(usersJson)) {
+        ids.push(`${key}`)
+      }
+      coVideoUids = ids.filter((id: string) => `${id}` !== `${teacherId}`)
+    }
 
     const newMe = me
 
@@ -726,12 +733,13 @@ export class RoomStore {
       course: {
         ...this.state.course,
         ...room,
+        coVideoUids,
       },
       me: {
         ...this.state.me,
         ...newMe
       },
-      users,
+      users: usersMap,
     }
     this.commit(this.state)
   }
@@ -821,7 +829,7 @@ export class RoomStore {
     return await eduApi.updateRoomUser(user)
   }
 
-  async updateApplyUserBy(applyUser: ApplyUser, params: any) {
+  async updateCoVideoUserBy(applyUser: UserParams, params: any) {
     await eduApi.updateRoomUser({
       userId: applyUser.userId,
       coVideo: params.coVideo,
@@ -832,9 +840,10 @@ export class RoomStore {
         userId: `${applyUser.userId}`,
         uid: `${applyUser.uid}`,
         account: `${applyUser.account}`,
-        operate: RoomMessage.acceptCoVideo,
+        operate: Boolean(params.coVideo) ? RoomMessage.acceptCoVideo : RoomMessage.cancelCoVideo
       }
     })
+    await this.fetchRoomState()
   }
 
   async updateUserBy(uid: string, params: Partial<AgoraUser & NotifyFlag>) {

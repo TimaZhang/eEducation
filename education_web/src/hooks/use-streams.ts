@@ -171,16 +171,13 @@ export default function useStream () {
     roomState.rtc.localSharedStream
   ]);
 
-  // TODO: need deprecate
   const currentHost = useMemo(() => {
-    //@ts-ignore
     if (!course.coVideoUids || isEmpty(course.coVideoUids)) return null;
-    //@ts-ignore
     const coVideoUid = ''+course.coVideoUids[0];
     const userAttr = roomState.users.get(`${coVideoUid}`);
     if (!userAttr) return null;
     // when i am current broadcaster
-    if (me.uid === coVideoUid) {
+    if (`${me.uid}` === coVideoUid) {
       if (roomState.rtc.localStream) {
         let _tmpStream = {
           ...roomState.rtc.localStream,
@@ -194,8 +191,7 @@ export default function useStream () {
       }
     } else {
       // when remote user is broadcaster
-      //@ts-ignore
-      const peerUid = course.linkId;
+      const peerUid = coVideoUid;
       const peerUserAttr = roomState.users.get(`${peerUid}`);
       if (peerUid && peerUserAttr) {
         const remoteStream = roomState.rtc.remoteStreams.get(`${peerUid}`);
@@ -213,8 +209,9 @@ export default function useStream () {
     }
     return null;
   }, [
-    course,
+    course.coVideoUids,
     me.uid,
+    // me.role,
     roomState.rtc.remoteStreams,
     roomState.rtc.localStream,
   ]);

@@ -47,12 +47,9 @@ const AgoraFetchJson = async ({url, method, data, token, authorization}:{url: st
 
   const {code, msg, data: responseData} = resp
 
-  console.log("code>>>>>>>>>>>>>>", code)
-
   if (code !== 0) {
     const error = getIntlError(`${code}`)
     const isErrorCode = `${error}` === `${code}`
-    console.log("error>>>>>>>>>: ", error, isErrorCode)
     globalStore.showToast({
       type: 'eduApiError',
       message: isErrorCode ? `ErrorCode: ${code}` : error
@@ -257,11 +254,11 @@ export class AgoraEduApi {
 
   // getUsersState
   // 获取用户状态
-  async getRoomState(roomId: string): Promise<{users: Map<string, AgoraUser>, room: Partial<ClassState>}> {
+  async getRoomState(roomId: string): Promise<{usersMap: Map<string, AgoraUser>, room: Partial<ClassState>}> {
     const {data} = await this.getRoomInfoBy(roomId)
     const {users: rawUsers, room: rawCourse} = data
 
-    let users: Map<string, AgoraUser> = rawUsers.reduce((acc: Map<string, AgoraUser>, it: any) => {
+    let usersMap: Map<string, AgoraUser> = rawUsers.reduce((acc: Map<string, AgoraUser>, it: any) => {
       return acc.set(`${it.uid}`, {
         role: it.role,
         account: it.userName,
@@ -286,14 +283,14 @@ export class AgoraEduApi {
       teacherId: ''
     }
 
-    const teacher = users.find((it: AgoraUser) => it.role === 1)
+    const teacher = usersMap.find((it: AgoraUser) => it.role === 1)
 
     if (teacher) {
       room.teacherId = teacher.uid
     }
 
     return {
-      users,
+      usersMap,
       room
     }
   }
@@ -338,15 +335,11 @@ export class AgoraEduApi {
     if (!this.appID) throw `appId is empty: ${this.appID}`
     let {data: {roomId, userToken}} = await this.entry(params)
 
-    const {data: {room, user, users = []}} = await this.getRoomInfoBy(roomId)
-
-    console.log("data", room, user, users, roomId, userToken)
+    const {data: {room, user, users: userList = []}} = await this.getRoomInfoBy(roomId)
 
     const me = user
 
-    console.log("me", me)
-
-    const teacherState = users.find((user: any) => +user.role === 1)
+    const teacherState = userList.find((user: any) => +user.role === 1)
 
     const course: any = {
       rid: room.channelName,
@@ -373,16 +366,16 @@ export class AgoraEduApi {
       course.teacherId = me.uid
     }
 
-    const coVideoUids = users.map((it: any) => +it.uid)
+    const coVideoUids = userList.map((it: any) => `${it.uid}`)
 
-    if (course.teacherId) {
-      course.coVideoUids = coVideoUids.filter((it: any) => it.uid !== course.teacherId)
+    if (course.teacherId && coVideoUids.length) {
+      course.coVideoUids = coVideoUids.filter((uid: any) => `${uid}` !== `${course.teacherId}`)
     }
 
     const result = {
       course,
       me,
-      users,
+      users: userList,
       appID: this.appID,
       onlineUsers: room.onlineUsers,
     }

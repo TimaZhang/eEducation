@@ -131,14 +131,12 @@ export default function BigClass() {
         closeLock.current = true;
         rtmLock.current = true;
         Promise.all([
-          rtmClient.notifyMessage({
-            cmd: ChatCmdType.update,
-            data: {
-              userId: `${roomStore.state.users.get(`${streamID}`)?.userId}`,
-              uid: `${streamID}`,
-              account: `${roomStore.state.users.get(`${streamID}`)?.account}`,
-              operate: RoomMessage.cancelCoVideo,
-            }
+          roomStore.updateCoVideoUserBy({
+            userId: `${roomStore.state.users.get(`${streamID}`)?.userId}`,
+            uid: `${streamID}`,
+            account: `${roomStore.state.users.get(`${streamID}`)?.account}`,
+          }, {
+            coVideo: 0
           }),
           quitClient
         ]).then(() => {
@@ -152,15 +150,25 @@ export default function BigClass() {
         })
       }
 
-      if (teacherUid && teacherUid === me.uid) {
+      if (`${teacherUid}` && `${teacherUid}` === `${me.uid}`) {
         rtmLock.current = true;
         closeLock.current = true;
         Promise.all([
-          rtmClient.sendPeerMessage(`${streamID}`, {
-            cmd: RoomMessage.cancelCoVideo,
+          roomStore.updateCoVideoUserBy({
+            userId: `${roomStore.state.users.get(`${streamID}`)?.userId}`,
+            uid: `${streamID}`,
+            account: `${roomStore.state.users.get(`${streamID}`)?.account}`,
+          }, {
+            coVideo: 0
           }),
-          roomStore.updateCourseLinkUid(0)
+          // roomStore.fetchRoomState()
         ]).then(() => {
+          roomStore.applyLock = false
+          roomStore.state.applyUser = {
+            uid: '',
+            account: '',
+            userId: '',
+          }
           rtmLock.current = false;
         }).catch((err: any) => {
           rtmLock.current = false;
