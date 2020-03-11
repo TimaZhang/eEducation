@@ -109,23 +109,11 @@ export const RootProvider: React.FC<any> = ({children}) => {
     });
     rtmClient.on("MessageFromPeer", ({ message: { text }, peerId, props }: { message: { text: string }, peerId: string, props: any }) => {
       const body = resolvePeerMessage(text);
-      resolveMessage(peerId, body);
+      // resolveMessage(peerId, body);
       roomStore
-      .handlePeerMessage(body.cmd, peerId)
+      .handlePeerMessage(body, peerId)
       .then(() => {
       }).catch(console.warn);
-    });
-    // rtmClient.on("AttributesUpdated", (attributes: object) => {
-    //   console.log('[rtm-client] updated origin attributes', attributes);
-    //   roomStore.updateRoomAttrsBy(attributes)
-    // });
-    rtmClient.on("MemberJoined", (memberId: string) => {
-    });
-    rtmClient.on("MemberLeft", (memberId: string) => {
-    });
-    rtmClient.on("MemberCountUpdated", (count: number) => {
-      console.log("[agora-web] member count updated", count)
-      !ref.current && roomStore.updateMemberCount(count);
     });
     rtmClient.on("ChannelMessage", ({ memberId, message }: { message: { text: string }, memberId: string }) => {
       const {cmd, data} = jsonParse(message.text);
@@ -176,12 +164,8 @@ export const RootProvider: React.FC<any> = ({children}) => {
           .then(() => {
             console.log('fetchRoomState')
           }).catch(console.warn)
-        // roomStore.updateCourse()
-        // roomStore.updateChannelMessage
-        // roomStore.updateUserBy()
       }
 
-      console.log("课程消息",  ChatCmdType.course);
       // 课程消息
       // course message
       if (cmd === ChatCmdType.course) {
@@ -209,7 +193,7 @@ export const RootProvider: React.FC<any> = ({children}) => {
       course: room.course,
       mediaDevice: room.mediaDevice,
     });
-    GlobalStorage.save('language', value.globalState.language);
+    GlobalStorage.setLanguage(value.globalState.language);
     // WARN: DEBUG ONLY MUST REMOVED IN PRODUCTION
     //@ts-ignore
     window.errorState = errorState;

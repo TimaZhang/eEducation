@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import _ from 'lodash';
+import { isEmpty } from 'lodash';
 import { roomStore } from '../stores/room';
 import { useRoomState } from '../containers/root-container';
 
@@ -148,6 +148,7 @@ export default function useStream () {
         ...roomState.rtc.localSharedStream,
         video: 1,
         audio: 1,
+        local: true,
       }
       return _tmpStream;
     }
@@ -173,13 +174,13 @@ export default function useStream () {
   // TODO: need deprecate
   const currentHost = useMemo(() => {
     //@ts-ignore
-    if (!course.linkId) return null;
+    if (!course.coVideoUids || isEmpty(course.coVideoUids)) return null;
     //@ts-ignore
-    const linkId = ''+course.linkId;
-    const userAttr = roomState.users.get(`${linkId}`);
+    const coVideoUid = ''+course.coVideoUids[0];
+    const userAttr = roomState.users.get(`${coVideoUid}`);
     if (!userAttr) return null;
     // when i am current broadcaster
-    if (me.uid === linkId) {
+    if (me.uid === coVideoUid) {
       if (roomState.rtc.localStream) {
         let _tmpStream = {
           ...roomState.rtc.localStream,

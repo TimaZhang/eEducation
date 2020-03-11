@@ -17,6 +17,7 @@ export interface AgoraStreamSpec {
   screen?: boolean
   microphoneId?: string
   cameraId?: string
+  screenAudio?: boolean
   audioOutput?: {
     volume: number
     deviceId: string
@@ -53,7 +54,7 @@ export const ENABLE_LOG = process.env.REACT_APP_AGORA_LOG as string === "true";
 // TODO: default screen sharing uid, please do not directly use it.
 export const SHARE_ID = 7;
 
-class AgoraRTCClient {
+export class AgoraRTCClient {
 
   private streamID: any;
   public _init: boolean = false;
@@ -249,7 +250,11 @@ class AgoraRTCClient {
 
   setAudioOutput(speakerId: string) {
     return new Promise((resolve, reject) => {
-      this._client.setAudioOutput(speakerId, resolve, reject);
+      if (this._client) {
+        this._client.setAudioOutput(speakerId, resolve, reject);
+        return
+      }
+      resolve()
     })
   }
 
@@ -432,11 +437,12 @@ export default class AgoraWebClient {
     uid: number,
     channel: string,
     token: string,
-    appId: string
+    appId: string,
   }) {
-    this.shareClient = new AgoraRTCClient();
+    console.log("startScreenShare ", uid, channel, token, appId)
+    const shareClient = new AgoraRTCClient();
     try {
-      await this.shareClient.createLocalStream({
+      await shareClient.createLocalStream({
         video: false,
         audio: false,
         screen: true,
@@ -445,10 +451,11 @@ export default class AgoraWebClient {
         microphoneId: '',
         cameraId: ''
       })
-      await this.shareClient.createClient(appId);
-      await this.shareClient.join(uid, channel, token);
-      await this.shareClient.publish();
+      await shareClient.createClient(appId);
+      await shareClient.join(uid, channel, token);
+      await shareClient.publish();
       this.shared = true;
+      this.shareClient = shareClient
     } catch(err) {
       throw err
     }

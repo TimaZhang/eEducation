@@ -49,7 +49,15 @@ export default function BigClass() {
       if (roomStore.state.course.teacherId) {
         rtmLock.current = true;
         roomStore.rtmClient.sendPeerMessage(`${roomStore.state.course.teacherId}`,
-          {cmd: RoomMessage.applyCoVideo})
+          {
+            cmd: 1,
+            data: {
+              userId: `${roomStore.state.me.userId}`,
+              uid: `${roomStore.state.me.uid}`,
+              account: `${roomStore.state.me.account}`,
+              operate: RoomMessage.applyCoVideo,
+            }
+          })
           .then((result: any) => {
             console.log("peerMessage result ", result);
           })
@@ -64,7 +72,15 @@ export default function BigClass() {
       if (roomStore.state.course.teacherId) {
         rtmLock.current = true;
         roomStore.rtmClient.sendPeerMessage(`${roomStore.state.course.teacherId}`,
-          {cmd: RoomMessage.cancelCoVideo})
+        {
+          cmd: 1,
+          data: {
+            userId: `${roomStore.state.me.userId}`,
+            uid: `${roomStore.state.me.uid}`,
+            account: `${roomStore.state.me.account}`,
+            operate: RoomMessage.applyCoVideo,
+          }
+        })
           .then((result: any) => {
             console.log("peerMessage result ", result);
           })
@@ -118,6 +134,9 @@ export default function BigClass() {
           rtmClient.notifyMessage({
             cmd: ChatCmdType.update,
             data: {
+              userId: `${roomStore.state.users.get(`${streamID}`)?.userId}`,
+              uid: `${streamID}`,
+              account: `${roomStore.state.users.get(`${streamID}`)?.account}`,
               operate: RoomMessage.cancelCoVideo,
             }
           }),

@@ -12,6 +12,7 @@ import { roomStore } from './room';
 import { handleRegion } from '../utils/helper';
 import { globalStore } from './global';
 import { t } from '../i18n';
+import { eduApi } from '../services/edu-api';
 
 const ENABLE_LOG = process.env.REACT_APP_AGORA_LOG === 'true';
 const RECORDING_UID = 1;
@@ -361,83 +362,6 @@ class Whiteboard extends EventEmitter {
   }
 
   private operator: any = null;
-
-  async startRecording (token?: string) {
-    if (!this.state) return;
-    this.operator = new RecordOperator(
-      {
-        agoraAppId: APP_ID,
-        customerId: process.env.REACT_APP_AGORA_CUSTOMER_ID as string,
-        customerCertificate: process.env.REACT_APP_AGORA_CUSTOMER_CERTIFICATE as string,
-        channelName: roomStore.state.course.rid,
-        // WARN: here is cloud recording mode
-        mode: 'mix',
-        token,
-        uid: `${RECORDING_UID}`,
-      },
-      {
-        audioProfile: 1,
-        transcodingConfig: {
-            width: 240,
-            height: 180,
-            bitrate: 120,
-            fps: 15,
-            // "mixedVideoLayout": 1,
-            // "maxResolutionUid": "1",
-        },
-      },
-      {
-          vendor: 2,
-          region: handleRegion(process.env.REACT_APP_AGORA_OSS_BUCKET_REGION as string),
-          bucket: process.env.REACT_APP_AGORA_OSS_BUCKET_NAME as string,
-          accessKey: process.env.REACT_APP_AGORA_OSS_BUCKET_KEY as string,
-          secretKey: process.env.REACT_APP_AGORA_OSS_BUCKET_SECRET as string,
-      },
-    );
-    await this.operator.acquire();
-    await this.operator.start();
-    this.state = {
-      ...this.state,
-      recording: true,
-      startTime: +Date.now(),
-    };
-    this.commit(this.state);
-  }
-
-  async stopRecording () {
-    if (!this.state) return;
-    await this.operator.query();
-    const res = await this.operator.stop();
-    const mediaUrl = get(res, 'serverResponse.fileList');
-    this.state = {
-      ...this.state,
-      recording: false,
-      endTime: +Date.now(),
-    };
-    this.commit(this.state);
-    return mediaUrl;
-  }
-
-  clearRecording () {
-
-    if (!this.state.room) {
-      console.warn("whiteboard is released", this.state.room);
-      throw 'whiteboard is released';
-    }
-
-    const endTime = this.state.endTime;
-    const startTime = this.state.startTime;
-    const roomUUID = this.state.room.uuid;
-    this.state = {
-      ...this.state,
-      endTime: 0,
-      startTime: 0,
-      recording: false,
-    }
-    this.commit(this.state);
-
-    return {endTime, startTime, roomUUID};
-  }
 
   async lock() {
     const lockBoardStatus = Boolean(roomStore.state.course.lockBoard)

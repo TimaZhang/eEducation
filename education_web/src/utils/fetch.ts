@@ -2,7 +2,7 @@ const FETCH_TIMEOUT = 10000
 
 const delay = 100;
 
-export async function AgoraFetch (input: RequestInfo, init?: RequestInit, retryCount: number = 3): Promise<any> {
+export async function AgoraFetch (input: RequestInfo, init?: RequestInit, retryCount: number = 0): Promise<any> {
   return new Promise((resolve, reject) => {
     const onResponse = (response: Response) => {
       if (!response.ok) {
@@ -12,12 +12,12 @@ export async function AgoraFetch (input: RequestInfo, init?: RequestInit, retryC
     }
 
     const onError = (error: any) => {
-      retryCount--;
-      if (retryCount) {
-        setTimeout(fetchRequest, delay);
-      } else {
+      // retryCount--;
+      // if (retryCount) {
+      //   setTimeout(fetchRequest, delay);
+      // } else {
         reject(error);
-      }
+      // }
     }
 
     const rescueError = (error: any) => {

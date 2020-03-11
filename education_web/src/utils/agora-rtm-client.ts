@@ -43,7 +43,7 @@ export interface ChannelBodyParams {
 
 export interface NotifyMessageParams {
   cmd: ChatCmdType
-  data: ChatMessage | UserMessage | CourseMessage
+  data: ChatMessage | UserMessage | CourseMessage | ReplayMessage
   enableHistoricalMessaging?: boolean
 }
 
@@ -56,13 +56,19 @@ export interface CourseMessage {
     RoomMessage.lockBoard |
     RoomMessage.unlockBoard |
     RoomMessage.acceptCoVideo |
-    RoomMessage.cancelCoVideo 
+    RoomMessage.cancelCoVideo |
+    RoomMessage.applyCoVideo
 }
 
-export interface ChatMessage {
+export type ChatMessage = {
   account: string
   content: string
-  recordId?: string
+  userId?: string
+}
+
+export interface ReplayMessage {
+  account: string
+  recordId: string
 }
 
 export interface UserMessage {
@@ -78,10 +84,21 @@ export interface ChatBody {
   content: string
 }
 
+export interface PeerMessage {
+  uid: string
+  userId: string
+  account: string
+  operate: number
+}
+
 export interface MessageBody {
   cmd: RoomMessage
   text?: string
-  data?: ChatMessage | UserMessage | CourseMessage
+  data?: ChatMessage |
+    UserMessage |
+    CourseMessage |
+    PeerMessage |
+    ReplayMessage
 }
 
 export type SessionProps = {
@@ -109,7 +126,7 @@ export default class AgoraRTMClient {
     this._currentChannel = null;
     this._currentChannelName = null;
     this._channelAttrsKey = null;
-    this._client = AgoraRTM.createInstance(APP_ID, { enableLogUpload: ENABLE_LOG, logFilter });
+    this._client = null;
   }
 
   public removeAllListeners(): any {
@@ -136,15 +153,22 @@ export default class AgoraRTMClient {
     this._bus.off(evtName, cb);
   }
 
-  async login (uid: string, token?: string) {
-    await this._client.login({uid, token});
-    this._client.on("ConnectionStateChanged", (newState: string, reason: string) => {
-      this._bus.emit("ConnectionStateChanged", {newState, reason});
-    });
-    this._client.on("MessageFromPeer", (message: any, peerId: string, props: any) => {
-      this._bus.emit("MessageFromPeer", {message, peerId, props});
-    });
-    this._logged = true;
+  async login (appID: string, uid: string, token?: string) {
+    const rtmClient = AgoraRTM.createInstance(appID, { enableLogUpload: ENABLE_LOG, logFilter });
+    try {
+      await rtmClient.login({uid, token});
+      rtmClient.on("ConnectionStateChanged", (newState: string, reason: string) => {
+        this._bus.emit("ConnectionStateChanged", {newState, reason});
+      });
+      rtmClient.on("MessageFromPeer", (message: any, peerId: string, props: any) => {
+        this._bus.emit("MessageFromPeer", {message, peerId, props});
+      });
+      this._client = rtmClient
+      this._logged = true;
+    } catch(err) {
+      rtmClient.removeAllListeners()
+      throw err
+    }
     return
   }
 
@@ -229,12 +253,23 @@ export default class AgoraRTMClient {
     return result.hasPeerReceived;
   }
 
-  async sendChannelMessage(data: Partial<ChannelBodyParams>) {
+  async sendRecordMessage(data: Partial<ChannelBodyParams>) {
+    const msgData: ReplayMessage = {
+      account: data.account as string,
+      recordId: data.recordId as string,
+    }
 
+    return this.notifyMessage({
+      cmd: ChatCmdType.replay,
+      data: msgData,
+      enableHistoricalMessaging: false
+    })
+  }
+
+  async sendChannelMessage(data: Partial<ChannelBodyParams>) {
     const msgData: ChatMessage = {
       account: data.account as string,
       content: data.content as string,
-      recordId: data.recordId as string
     }
 
     return this.notifyMessage({

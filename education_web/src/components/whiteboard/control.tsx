@@ -86,31 +86,42 @@ export default function Control({
   
       if (roomState.course.isRecording) {
         if (!canStop()) return;
-        let mediaUrl = await whiteboard.stopRecording();
+        await roomStore.stopRecording();
         globalStore.showToast({
           type: 'recording',
           message: t('toast.stop_recording'),
         });
-        if (whiteboard.state.endTime 
-          && whiteboard.state.startTime) {
-          const {endTime, startTime, roomUUID} = whiteboard.clearRecording();
-          const message = {
-            account: me.account,
-            id: me.uid,
-            link: `/replay/${roomUUID}/${startTime}/${endTime}/${mediaUrl}`,
-            text: '',
-            ts: +Date.now()
-          }
-          roomStore.updateChannelMessage(message);
-          return;
-        }
       } else {
-        await whiteboard.startRecording();
+        await roomStore.startRecording();
         globalStore.showToast({
           type: 'recording',
           message: t('toast.start_recording'),
         });
       }
+      //   globalStore.showToast({
+      //     type: 'recording',
+      //     message: t('toast.stop_recording'),
+      //   });
+      //   if (whiteboard.state.endTime 
+      //     && whiteboard.state.startTime) {
+      //     const {endTime, startTime, roomUUID} = whiteboard.clearRecording();
+      //     const message = {
+      //       account: me.account,
+      //       id: me.uid,
+      //       link: `/replay/${roomUUID}/${startTime}/${endTime}/${mediaUrl}`,
+      //       text: '',
+      //       ts: +Date.now()
+      //     }
+      //     roomStore.updateChannelMessage(message);
+      //     return;
+      //   }
+      // } else {
+      //   await roomStore.startRecording();
+      //   globalStore.showToast({
+      //     type: 'recording',
+      //     message: t('toast.start_recording'),
+      //   });
+      // }
     } catch(err) {
       if (err.recordingErr) {
         globalStore.showToast({

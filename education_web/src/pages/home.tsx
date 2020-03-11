@@ -81,44 +81,6 @@ function HomePage() {
     
     if (!roomTypes[session.roomType]) return;
     const path = roomTypes[session.roomType].path
-    // globalStore.showLoading();
-    // const payload = {
-    //   uid: genUid(),
-    //   rid: `${session.roomType}${MD5(session.roomName)}`,
-    //   role: session.role,
-    //   roomName: session.roomName,
-    //   roomType: session.roomType,
-    //   video: 1,
-    //   audio: 1,
-    //   chat: 1,
-    //   account: session.yourName,
-    //   token: '',
-    //   boardId: '',
-    //   linkId: 0,
-    //   sharedId: 0,
-    //   lockBoard: 0,
-    // }
-    // roomStore.loginAndJoin(payload).then(() => {
-    //   // roomStore.updateSessionInfo(payload);
-    //   history.push(`/classroom/${path}`);
-    // }).catch((err: any) => {
-    //   if (err.reason) {
-    //     globalStore.showToast({
-    //       type: 'rtmClient',
-    //       message: t('toast.rtm_login_failed_reason', {reason: err.reason}),
-    //     })
-    //   } else {
-    //     globalStore.showToast({
-    //       type: 'rtmClient',
-    //       message: t('toast.rtm_login_failed'),
-    //     })
-    //   }
-    //   console.warn(err);
-    // })
-    // .finally(() => {
-    //     ref.current = false;
-    //     globalStore.stopLoading();
-    // })
     roomStore.LoginToRoom({
       userName: session.yourName,
       roomName: session.roomName,
@@ -127,6 +89,9 @@ function HomePage() {
     }).then(() => {
       history.push(`/classroom/${path}`)
     }).catch((err: any) => {
+      if (err.hasOwnProperty('api_error')) {
+        return
+      }
       if (err.reason) {
         globalStore.showToast({
           type: 'rtmClient',

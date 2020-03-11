@@ -19,7 +19,7 @@ import { roomStore } from '../stores/room';
 import { whiteboard } from '../stores/whiteboard';
 import { globalStore } from '../stores/global';
 import { platform } from '../utils/platform';
-import AgoraWebClient, { SHARE_ID } from '../utils/agora-rtc-client';
+// import AgoraWebClient, { SHARE_ID } from '../utils/agora-rtc-client';
 import "white-web-sdk/style/index.css";
 import { ViewMode } from 'white-web-sdk';
 import { t } from '../i18n';

@@ -76,9 +76,18 @@ const DialogContainer = () => {
       // p2p message rejectCoVideo
       // 老师拒绝学生连麦申请
       roomStore.rtmClient.sendPeerMessage(
-        `${roomStore.applyUid}`, {cmd: RoomMessage.rejectCoVideo}
+        `${roomStore.state.applyUser.uid}`,
+        {
+          cmd: 1,
+          data: {
+            operate: RoomMessage.rejectCoVideo,
+            userId: `${roomStore.state.applyUser.userId}`,
+            uid: `${roomStore.state.applyUser.uid}`,
+            account: `${roomStore.state.applyUser.account}`,
+          }
+        }
       ).then(() => {
-        roomStore.applyLock = 0
+        roomStore.applyLock = false
         globalStore.removeNotice();
         globalStore.removeDialog();
       }).catch((err) => {
@@ -96,7 +105,7 @@ const DialogContainer = () => {
       // p2p message accept coVideo
       // 老师同意学生连麦申请
       Promise.all([
-        roomStore.updateUserBy(`${roomStore.applyUid}`, {
+        roomStore.updateApplyUserBy(roomStore.state.applyUser, {
           coVideo: 1
         })
       ]).then(() => {

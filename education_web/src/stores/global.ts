@@ -213,13 +213,17 @@ export class Root {
     this.commit(this.state);
   }
 
+  getLanguage(): string {
+    return GlobalStorage.read('demo_language')
+  }
+
   setLanguage(language: string) {
     this.state = {
       ...this.state,
       language,
     }
     this.commit(this.state);
-    GlobalStorage.save('language', this.state.language);
+    GlobalStorage.save('demo_language', this.state.language);
     window.location.reload();
   }
 

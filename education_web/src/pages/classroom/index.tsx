@@ -14,9 +14,9 @@ import { AgoraElectronClient } from '../../utils/agora-electron-client';
 import { t } from '../../i18n';
 
 export const roomTypes = [
-  {value: 0, text: 'One-on-One', path: 'one-to-one'},
-  {value: 1, text: 'Small Class', path: 'small-class'},
-  {value: 2, text: 'Large Class', path: 'big-class'},
+  {value: 0, path: 'one-to-one'},
+  {value: 1, path: 'small-class'},
+  {value: 2, path: 'big-class'},
 ];
 
 export function RoomPage({ children }: any) {
@@ -86,12 +86,15 @@ export function RoomPage({ children }: any) {
   
   const rtc = useRef<boolean>(false);
 
+  // const canPublish = useMemo(() => {
+  //   return !isBigClass ||
+  //     (isBigClass && 
+  //       (me.role === 1 ||
+  //         me.coVideo));
+  // }, [me.uid, me.coVideo, me.role, isBigClass]);
   const canPublish = useMemo(() => {
-    return !isBigClass ||
-      (isBigClass && 
-        (me.role === 1 ||
-          me.coVideo));
-  }, [me.uid, me.coVideo, me.role, isBigClass]);
+    return me.coVideo;
+  }, [me.coVideo]);
 
   useEffect(() => {
     return () => {
@@ -249,15 +252,8 @@ export function RoomPage({ children }: any) {
           webClient.subscribe(stream);
         });
         webClient.rtc.on('stream-removed', ({ stream }: any) => {
-          console.log("[agora-web] removed remote stream, id: ", stream.getId(), roomStore.applyUid);
+          console.log("[agora-web] removed remote stream, id: ", stream.getId());
           const id = stream.getId();
-          // if (id === roomStore.applyUid) {
-          //   globalStore.removeNotice();
-          //   me.role === 'teacher' &&
-          //   roomStore.updateCourseLinkUid(0).then(() => {
-          //     console.log("update teacher link_uid to 0");
-          //   }).catch(console.warn);
-          // }
           roomStore.removeRemoteStream(stream.getId());
         });
         webClient.rtc.on('peer-online', ({uid}: any) => {
@@ -265,14 +261,7 @@ export function RoomPage({ children }: any) {
           roomStore.addRTCUser(uid);
         });
         webClient.rtc.on('peer-leave', ({ uid }: any) => {
-          console.log("[agora-web] peer-leave, id: ", uid, roomStore.applyUid);
-          if (uid === roomStore.applyUid) {
-            globalStore.removeNotice();
-            me.role === 1 &&
-            roomStore.updateCourseLinkUid(0).then(() => {
-              console.log("update teacher link_uid to 0");
-            }).catch(console.warn);
-          }
+          console.log("[agora-web] peer-leave, id: ", uid);
           roomStore.removePeerUser(uid);
           roomStore.removeRemoteStream(uid);
         });
@@ -361,13 +350,6 @@ export function RoomPage({ children }: any) {
         });
         // when trigger `removestream` it means peer user & peer stream is offline
         nativeClient.on('removestream', ({ uid }: any) => {
-          if (uid === roomStore.applyUid) {
-            globalStore.removeNotice();
-            me.role === 1 &&
-            roomStore.updateCourseLinkUid(0).then(() => {
-              console.log("update teacher link_uid to 0");
-            }).catch(console.warn);
-          }
           roomStore.removePeerUser(uid);
           roomStore.removeRemoteStream(uid);
         });

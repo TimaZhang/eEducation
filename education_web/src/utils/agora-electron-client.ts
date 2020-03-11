@@ -276,7 +276,7 @@ export class AgoraElectronClient {
     })
   }
 
-  async stopScreenShare() {
+  stopScreenShare() {
     if (this.shared) {
       this.rtcEngine.once('videoSourceLeaveChannel', (evt: any) => {
         this.roomStore.removeLocalSharedStream();
