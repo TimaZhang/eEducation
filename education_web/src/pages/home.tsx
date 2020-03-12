@@ -16,6 +16,7 @@ import MD5 from 'js-md5';
 import { globalStore, roomTypes } from '../stores/global';
 import { t } from '../i18n';
 import GlobalStorage from '../utils/custom-storage';
+import { genUUID } from '../utils/api';
 
 const useStyles = makeStyles ((theme: Theme) => ({
   formControl: {
@@ -87,7 +88,8 @@ function HomePage() {
       userName: session.yourName,
       roomName: session.roomName,
       role: session.role === 'teacher' ? 1 : 2,
-      type: session.roomType
+      type: session.roomType,
+      uuid: genUUID()
     }).then(() => {
       history.push(`/classroom/${path}`)
     }).catch((err: any) => {

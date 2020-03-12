@@ -11,6 +11,7 @@ import { isElectron } from '../utils/platform';
 import GlobalStorage from '../utils/custom-storage';
 import { t } from '../i18n';
 import { eduApi, UserAttrsParams } from '../services/edu-api';
+import {genUUID} from '../utils/api';
 
 export interface NotifyFlag {
   broad: boolean
@@ -38,6 +39,7 @@ export interface Me extends AgoraUser {
   screenToken?: string
   appID: string
   coVideo: number
+  uuid: string
 }
 
 export interface ClassState {
@@ -544,9 +546,9 @@ export class RoomStore {
   }
 
   async LoginToRoom(payload: any, pass: boolean = false) {
-    const {userName, roomName, role, type} = payload
+    const {userName, roomName, role, type, uuid} = payload
     try {
-      const res = await eduApi.Login({userName, roomName, role, type})
+      const res = await eduApi.Login({userName, roomName, role, type, uuid})
 
       const {
         course,

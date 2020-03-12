@@ -13,6 +13,7 @@ import AgoraWebClient, { AgoraStreamSpec, SHARE_ID } from '../../utils/agora-rtc
 import { AgoraElectronClient } from '../../utils/agora-electron-client';
 import { t } from '../../i18n';
 import { eduApi } from '../../services/edu-api';
+import { genUUID } from '../../utils/api';
 
 export const roomTypes = [
   {value: 0, path: 'one-to-one'},
@@ -38,7 +39,8 @@ export function RoomPage({ children }: any) {
       userName: me.account,
       roomName: course.roomName,
       role: me.role,
-      type: course.roomType
+      type: course.roomType,
+      uuid: genUUID()
     }
     lock.current = true;
     if (roomStore.state.rtm.joined) return;
@@ -282,6 +284,7 @@ export function RoomPage({ children }: any) {
 
           if (roomStore.state.me.role === 1 && roomStore.state.course.roomType === 2) {
             if (roomStore.state.applyUser.account) {
+              globalStore.removeNotice()
               globalStore.showToast({
                 type: 'rtmClient',
                 message: t('toast.student_peer_leave', {reason: roomStore.state.applyUser.account}),

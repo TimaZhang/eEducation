@@ -65,6 +65,7 @@ export interface EntryParams {
   roomName: string
   type: number
   role: number
+  uuid: string
 }
 
 export type RoomParams = Partial<{
@@ -345,6 +346,10 @@ export class AgoraEduApi {
 
     if (me.role === 1) {
       course.teacherId = me.uid
+    }
+
+    if (params.uuid) {
+      me.uuid = params.uuid
     }
 
     const coVideoUids = userList.map((it: any) => `${it.uid}`)
