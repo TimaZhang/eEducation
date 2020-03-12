@@ -87,7 +87,6 @@ const DialogContainer = () => {
           }
         }
       ).then(() => {
-        roomStore.applyLock = false
         globalStore.removeNotice();
         globalStore.removeDialog();
       }).catch((err) => {

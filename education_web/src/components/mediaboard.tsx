@@ -44,6 +44,8 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
   children
 }) => {
 
+  const location = useLocation()
+
   const roomState = useRoomState();
 
   const whiteboardState = useWhiteboardState();
@@ -92,7 +94,14 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
     }
   }
 
-  const isHost = false
+  const studentIsHost = useMemo(() => {
+    if (
+      location.pathname.match(/big-class/) 
+      && me.role === 2 && me.coVideo) {
+      return true
+    }
+    return false
+  }, [me.role, me.coVideo, location])
 
   // TODO: need deprecate
   // const isHost = useMemo(() => {
@@ -100,8 +109,6 @@ const MediaBoard: React.FC<MediaBoardProps> = ({
   // }, [roomStore.state.me.uid,
   //   roomStore.state.course.linkId]);
   
-  const location = useLocation();
-
   const current = useMemo(() => {
     return whiteboardState.scenes.get(whiteboardState.currentScenePath);
   }, [whiteboardState.scenes, whiteboardState.currentScenePath]);
@@ -521,7 +528,7 @@ const items = [
         current={pageTool}
         currentPage={currentPage}
         totalPage={totalPage}
-        isHost={isHost}
+        isHost={studentIsHost}
         onClick={handlePageTool}/> : null }
         {tool === 'folder' && whiteboardState.room ? 
           <ResourcesMenu

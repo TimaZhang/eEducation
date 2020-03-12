@@ -41,6 +41,7 @@ const en = {
     'teacher_reject_co_video': 'Teacher already rejected co-video',
     'teacher_cancel_co_video': 'Teacher already canceled co-video',
     'student_cancel_co_video': 'Student canceled co-video',
+    'student_peer_leave': '"{reason}" Left',
   },
   'notice': {
     'student_interactive_apply': `"{reason}" wants to interact with you`
@@ -73,7 +74,7 @@ const en = {
     'room_type': 'Room Type',
     'room_join': 'Join',
     'short_title': {
-      'title': 'Agora Online Classroom',
+      'title': 'Agora Cloud Class',
       'subtitle': 'Powered by agora.io, a leading online learning engagement platform',
     },
     'name_too_long': 'name too long, should <= 20 characters',
@@ -99,7 +100,13 @@ const en = {
   },
   'replay': {
     'loading': 'loading...',
+    'recording': 'In Recording',
+    'finished': 'Finished',
+    'finished_recording_to_be_download': 'Server prepare downloading',
+    'finished_download_to_be_convert': 'Server prepare converting',
+    'finished_convert_to_be_upload': 'Server prepare saving',
   },
+  'course_recording': 'course recording',
   'build_version': `build version: ${build_version}`,
 }
 

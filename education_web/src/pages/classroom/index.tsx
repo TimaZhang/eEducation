@@ -12,6 +12,7 @@ import { platform } from '../../utils/platform';
 import AgoraWebClient, { AgoraStreamSpec, SHARE_ID } from '../../utils/agora-rtc-client';
 import { AgoraElectronClient } from '../../utils/agora-electron-client';
 import { t } from '../../i18n';
+import { eduApi } from '../../services/edu-api';
 
 export const roomTypes = [
   {value: 0, path: 'one-to-one'},
@@ -83,6 +84,20 @@ export function RoomPage({ children }: any) {
       });
     }
   }, [location]);
+
+  // useEffect(() => {
+  //   if (location.pathname.match(/big-class/)) {
+  //     if (roomStore.state.applyUser.account) {
+  //       globalStore.showNotice({
+  //         reason: 'peer_hands_up',
+  //         text: t('notice.student_interactive_apply', { reason: `${roomStore.state.applyUser.account}` }),
+  //       });
+  //       return () => {
+  //         globalStore.removeNotice()
+  //       }
+  //     }
+  //   }
+  // }, [roomStore.state.applyUser.account, location])
   
   const rtc = useRef<boolean>(false);
 
@@ -264,6 +279,20 @@ export function RoomPage({ children }: any) {
           console.log("[agora-web] peer-leave, id: ", uid);
           roomStore.removePeerUser(uid);
           roomStore.removeRemoteStream(uid);
+
+          if (roomStore.state.me.role === 1 && roomStore.state.course.roomType === 2) {
+            if (roomStore.state.applyUser.account) {
+              globalStore.showToast({
+                type: 'rtmClient',
+                message: t('toast.student_peer_leave', {reason: roomStore.state.applyUser.account}),
+              })
+              roomStore.updateApplyUser({
+                uid: '',
+                account: '',
+                userId: '',
+              })
+            }
+          }
         });
         webClient.rtc.on("stream-fallback", ({ uid, attr }: any) => {
           const msg = attr === 0 ? 'resume to a&v mode' : 'fallback to audio mode';

@@ -69,26 +69,17 @@ export default function BigClass() {
     }
   
     if (type === 'hands_up_end') {
-      if (roomStore.state.course.teacherId) {
-        rtmLock.current = true;
-        roomStore.rtmClient.sendPeerMessage(`${roomStore.state.course.teacherId}`,
-        {
-          cmd: 1,
-          data: {
-            userId: `${roomStore.state.me.userId}`,
-            uid: `${roomStore.state.me.uid}`,
-            account: `${roomStore.state.me.account}`,
-            operate: RoomMessage.applyCoVideo,
-          }
-        })
-          .then((result: any) => {
-            console.log("peerMessage result ", result);
-          })
-          .catch(console.warn)
-          .finally(() => {
-            rtmLock.current = false;
-          })
-      }
+      rtmLock.current = true;
+      roomStore.updateCoVideoUserBy({
+        userId: `${roomStore.state.me.userId}`,
+        uid: `${roomStore.state.me.uid}`,
+        account: `${roomStore.state.me.account}`,
+      }, {
+        coVideo: 0
+      }).catch(console.warn)
+      .finally(() => {
+        rtmLock.current = false;
+      })
     }
   }
 
@@ -161,14 +152,12 @@ export default function BigClass() {
           }, {
             coVideo: 0
           }),
-          // roomStore.fetchRoomState()
         ]).then(() => {
-          roomStore.applyLock = false
-          roomStore.state.applyUser = {
+          roomStore.updateApplyUser({
             uid: '',
             account: '',
             userId: '',
-          }
+          })
           rtmLock.current = false;
         }).catch((err: any) => {
           rtmLock.current = false;

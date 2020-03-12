@@ -41,6 +41,7 @@ const zhCN: any = {
     'teacher_reject_co_video': '老师已拒绝连麦',
     'teacher_cancel_co_video': '老师已取消连麦',
     'student_cancel_co_video': '学生已取消连麦',
+    'student_peer_leave': '"{reason}" 离开了',
   },
   'notice': {
     'student_interactive_apply': `"{reason}"想和你连麦`
@@ -73,7 +74,7 @@ const zhCN: any = {
     'room_type': '房间类型',
     'room_join': '加入房间',
     'short_title': {
-      'title': '声网在线教育解决方案',
+      'title': '声网云课堂',
       'subtitle': '由声网提供',
     },
     'name_too_long': '名字过长，不得超过20个字符',
@@ -99,7 +100,13 @@ const zhCN: any = {
   },
   'replay': {
     'loading': '加载中...',
+    'recording': '在录制中',
+    'finished': '录制完成',
+    'finished_recording_to_be_download': '服务端准备下载中',
+    'finished_download_to_be_convert': '服务端准备转换中',
+    'finished_convert_to_be_upload': '服务端准备保存中',
   },
+  'course_recording': '录制回放',
   'build_version': `构建版本: ${build_version}`,
 }
 

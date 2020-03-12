@@ -66,6 +66,7 @@ export class AgoraRTCClient {
   public _localStream: any = null;
   public _streamEvents: string[];
   public _clientEvents: string[];
+  public _addEventListener: boolean = false;
 
   constructor () {
     this.streamID = null;
@@ -104,22 +105,23 @@ export class AgoraRTCClient {
   }
 
   subscribeClientEvents() {
+    if (this._addEventListener) return
+    this._addEventListener = true
     for (let evtName of clientEvents) {
       this._clientEvents.push(evtName);
       this._client.on(evtName, (args: any) => {
-        if (evtName === "peer-leave") {
-          console.log("[agora-web] peer-leave: ", args);
-        }
-        
         this._bus.emit(evtName, args);
       });
     }
   }
 
   unsubscribeClientEvents() {
-    for (let evtName of this._clientEvents) {
-      this._client.off(evtName, () => {});
-      this._clientEvents = this._clientEvents.filter((it: any) => it === evtName);
+    if (this._addEventListener) {
+      for (let evtName of this._clientEvents) {
+        this._client.off(evtName, () => {});
+        this._clientEvents = this._clientEvents.filter((it: any) => it === evtName);
+      }
+      this._addEventListener = false
     }
   }
 

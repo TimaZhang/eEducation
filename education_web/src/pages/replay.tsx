@@ -14,6 +14,8 @@ import { getOSSUrl } from '../utils/helper';
 import { t } from '../i18n';
 import { RTMReplayer, RtmPlayerState } from '../components/whiteboard/agora/rtm-player';
 import { errorStore } from './error-page/state';
+import { useAsync } from 'react-use';
+import { eduApi } from '../services/edu-api';
 
 export interface IPlayerState {
   beginTimestamp: number
@@ -177,11 +179,11 @@ const useReplayContext = () => React.useContext(ReplayContext);
 const ReplayContainer: React.FC<{}> = () => {
   const [state, setState] = React.useState<IPlayerState>(defaultState);
 
-  const {uuid, startTime, endTime, mediaUrl} = useParams();
+  const {recordId} = useParams();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const rid: string = searchParams.get('rid') as string;
-  const senderId: string = searchParams.get('senderId') as string;
+  const roomId: string = searchParams.get('roomId') as string;
+  const userToken: string = searchParams.get('token') as string;
 
   React.useEffect(() => {
     store.subscribe((state: any) => {
@@ -192,25 +194,22 @@ const ReplayContainer: React.FC<{}> = () => {
     }
   }, []);
 
-  if (!uuid || !rid || !startTime || !endTime || !mediaUrl) {
-    errorStore.state = {
-      reason: t('error.components.paramsEmpty', {reason: 'uuid, rid, startTime, endTime, mediaUrl'})
-    }
-    return <Redirect to="/404"></Redirect>
-  }
+  const {loading, value: result} = useAsync(async () => {
+    return await eduApi.getCourseRecordBy(recordId as string, roomId as string, userToken)
+  }, [recordId, roomId, userToken]);
 
   const value = state;
 
   return (
     <ReplayContext.Provider value={value}>
-      <NetlessAgoraReplay
-        rid={rid}
-        senderId={senderId}
-        whiteboardUUID={uuid}
-        startTime={+startTime}
-        endTime={+endTime}
-        mediaUrl={mediaUrl}
-      />
+      {result?.status !== 2 ?
+        <Progress title={t(`replay.${result?.statusText ? result?.statusText : 'loading'}`)} /> : 
+        <NetlessAgoraReplay
+          whiteboardUUID={result?.boardId as string}
+          startTime={result?.startTime as number}
+          endTime={result?.endTime as number}
+          mediaUrl={result?.url as string} />
+      }
     </ReplayContext.Provider>
   )
 }
@@ -219,8 +218,6 @@ export default ReplayContainer;
 
 export type NetlessAgoraReplayProps = {
   whiteboardUUID: string
-  rid: string
-  senderId: string
   startTime: number
   endTime: number
   mediaUrl: string
@@ -228,8 +225,6 @@ export type NetlessAgoraReplayProps = {
 
 export const NetlessAgoraReplay: React.FC<NetlessAgoraReplayProps> = ({
   whiteboardUUID: uuid,
-  rid,
-  senderId,
   startTime,
   endTime,
   mediaUrl
@@ -321,7 +316,7 @@ export const NetlessAgoraReplay: React.FC<NetlessAgoraReplayProps> = ({
             beginTimestamp: +startTime,
             duration: duration,
             room: uuid,
-            mediaURL: getOSSUrl(mediaUrl as string),
+            mediaURL: mediaUrl,
             roomToken: roomToken,
           }, {
             onCatchErrorWhenRender: error => {

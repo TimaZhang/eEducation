@@ -192,6 +192,7 @@ export const RootProvider: React.FC<any> = ({children}) => {
       me: room.me,
       course: room.course,
       mediaDevice: room.mediaDevice,
+      applyUser: room.applyUser,
     });
     GlobalStorage.setLanguage(value.globalState.language);
     // WARN: DEBUG ONLY MUST REMOVED IN PRODUCTION

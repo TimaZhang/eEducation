@@ -49,7 +49,7 @@ export default function () {
               <BigClass />
             </RoomPage>
           </Route>
-          <Route exact path="/replay/:uuid/:startTime/:endTime/:mediaUrl">
+          <Route path="/replay/record/:recordId">
             <ReplayContainer />
           </Route>
           {/* <Route path="/error">

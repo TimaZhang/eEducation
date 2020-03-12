@@ -26,7 +26,7 @@ export interface AgoraUser {
   audio: number
   chat: number
   grantBoard: number
-  coVideo: number // 当前是否为连麦状态
+  // coVideo: number // 当前是否为连麦状态
   userId: string // 仅用于服务端
   screenId: string //仅用于屏幕共享
 }
@@ -37,6 +37,7 @@ export interface Me extends AgoraUser {
   channelName: string
   screenToken?: string
   appID: string
+  coVideo: number
 }
 
 export interface ClassState {
@@ -213,8 +214,6 @@ export class RoomStore {
     ...GlobalStorage.read('agora_room')
   });
 
-  public applyLock: boolean = false;
-
   public windowId: number = 0;
 
   // public rtmClient: AgoraRTMClient = new AgoraRTMClient();
@@ -237,7 +236,6 @@ export class RoomStore {
     this.state = {
       ...this.defaultState,
     }
-    this.applyLock = false;
     this.subject.next(this.state);
   }
 
@@ -264,16 +262,16 @@ export class RoomStore {
   }
 
   isTeacher(peerId: string) {
-    if (!peerId
-      || !this.state.course.teacherId
-      || this.state.course.teacherId !== peerId
+    if (!`${peerId}`
+      || !`${this.state.course.teacherId}`
+      || `${this.state.course.teacherId}` !== `${peerId}`
     ) return false;
     return true;
   }
 
   isStudent(peerId: string) {
-    if (!peerId
-      || this.state.course.teacherId === peerId
+    if (!`${peerId}`
+      || `${this.state.course.teacherId}` === `${peerId}`
     ) return false;
 
     return true;
@@ -432,19 +430,20 @@ export class RoomStore {
     if (this.isTeacher(myUid) && this.isStudent(peerId)) {
       switch (operate) {
         case RoomMessage.applyCoVideo: {
+          if (globalStore.state.notice.reason === 'peer_hands_up') {
+            // when notice is peer_hands_up, ignore peer message
+            // 当已经收到消息以后屏蔽这条"举手申请"
+            console.warn(`ignore: `, peerId, userId, uid, operate, account)
+            return
+          }
           const applyUserId = userId
 
           if (applyUserId && peerId) {
-            this.applyLock = true;
-            this.state = {
-              ...this.state,
-              applyUser: {
-                account: `${account}`,
-                userId: `${applyUserId}`,
-                uid: `${peerId}`,
-              }
-            }
-            this.commit(this.state);
+            roomStore.updateApplyUser({
+              account: `${account}`,
+              userId: `${applyUserId}`,
+              uid: `${peerId}`,
+            });
             globalStore.showNotice({
               reason: 'peer_hands_up',
               text: t('notice.student_interactive_apply', { reason: `${account}` }),
@@ -567,7 +566,7 @@ export class RoomStore {
           chat: it.enableChat,
           grantBoard: it.grantBoard,
           userId: it.userId,
-          coVideo: 1,
+          // coVideo: 1,
           screenId: it.screenId,
         });
       }, Map<string, AgoraUser>());
@@ -650,19 +649,6 @@ export class RoomStore {
     this.commit(this.state);
   }
 
-  async updateCourseLinkUid(linkId: number) {
-    const me = this.state.me;
-    // const prevLinkId = this.state.course.linkId
-    // if (prevLinkId) {
-    //   await this.deleteKey(prevLinkId)
-    // }
-    // let res = await this.updateLocal({
-    //   linkId,
-    // })
-    // this.applyLock = linkId;
-    // return res;
-  }
-
   async deleteKey(uid: number) {
     this.rtmClient.deleteAttributesByKey(uid)
   }
@@ -704,14 +690,14 @@ export class RoomStore {
   }
 
   async fetchRoomState() {
-    let {usersMap, room} = await eduApi.getRoomState(this.state.course.roomId)
-    return await this.updateRoomState({usersMap, room, broad: false})
+    let {usersMap, room, me} = await eduApi.getRoomState(this.state.course.roomId)
+    return await this.updateRoomState({usersMap, room, me, broad: false})
   }
 
-  async updateRoomState(params: {usersMap: Map<string, AgoraUser>, room: Partial<ClassState>} & NotifyFlag) {
-    const {broad, usersMap, room} = params
+  async updateRoomState(params: {usersMap: Map<string, AgoraUser>, room: Partial<ClassState>, me: Partial<Me>} & NotifyFlag) {
+    const {broad, usersMap, room, me} = params
 
-    const me = usersMap.get(`${this.state.me.uid}`)
+    // const me = usersMap.get(`${this.state.me.uid}`)
 
     const teacherId = room.teacherId as string
 
@@ -811,7 +797,7 @@ export class RoomStore {
     }
     this.commit(this.state)
 
-    const {value} = this.resolveUserAttrsToOperate(newMeAttrs)
+    const {value} = this.resolveUserAttrsToOperate(params)
 
     if (broad) {
       await this.rtmClient.notifyMessage({
@@ -846,6 +832,14 @@ export class RoomStore {
     await this.fetchRoomState()
   }
 
+  updateApplyUser(user: any) {
+    this.state = {
+      ...this.state,
+      applyUser: user
+    }
+    this.commit(this.state)
+  }
+
   async updateUserBy(uid: string, params: Partial<AgoraUser & NotifyFlag>) {
     const {broad = true, ...userParams} = params
     const prevUser = this.state.users.get(`${uid}`)
@@ -869,10 +863,8 @@ export class RoomStore {
       enableAudio: newUserAttrs.audio as number,
       enableVideo: newUserAttrs.video as number,
       grantBoard: newUserAttrs.grantBoard as number,
-      coVideo: newUserAttrs.coVideo as number
+      // coVideo: newUserAttrs.coVideo as number
     }
-
-    console.log("newUserAttrs: ", newUserAttrs, userAttrsParams)
 
     if (broad) {
       await this.updateRoomUser({user: userAttrsParams})
@@ -884,14 +876,14 @@ export class RoomStore {
     }
     this.commit(this.state)
 
-    const {value} = this.resolveUserAttrsToOperate(newUserAttrs)
+    const {value} = this.resolveUserAttrsToOperate(params)
 
     if (broad) {
       await this.rtmClient.notifyMessage({
         cmd: ChatCmdType.update,
         data: {
-          uid: `${this.state.me.uid}`,
-          account: `${this.state.me.account}`,
+          uid: `${uid}`,
+          account: `${prevUser?.account}`,
           operate: value,
         }
       })
@@ -1116,20 +1108,31 @@ export class RoomStore {
 
   async stopRecording () {
     const {data} = await eduApi.stopRecording(this.state.course.recordId)
-    const recordId = this.state.course.recordId
+    const roomId = this.state.course.roomId
+    const {data: roomInfo} = await eduApi.getRoomInfoBy(roomId)
+    const recordId = roomInfo.room.recordId
     this.state = {
       ...this.state,
       course: {
         ...this.state.course,
-        recordId: '',
+        recordId: recordId,
         isRecording: false
       }
     }
     this.commit(this.state)
     await this.rtmClient.sendRecordMessage({
       account: `${this.state.me.account}`,
-      recordId: `${this.state.course.recordId}`
+      recordId: `${recordId}`
     })
+    if (this.state.me.role === 1) {
+      this.updateChannelMessage({
+        account: `${this.state.me.account}`,
+        text: ``,
+        link: `${recordId}`,
+        ts: +Date.now(),
+        id: this.state.me.uid,
+      })
+    }
   }
 }
 

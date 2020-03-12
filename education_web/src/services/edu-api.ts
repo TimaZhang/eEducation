@@ -1,5 +1,5 @@
 import { AgoraFetch } from "../utils/fetch";
-import { ClassState, AgoraUser } from "../stores/room";
+import { ClassState, AgoraUser, Me } from "../stores/room";
 import {Map} from 'immutable'
 import { getIntlError, setIntlError } from "./intl-error-helper";
 import { globalStore } from "../stores/global";
@@ -10,7 +10,7 @@ export interface UserAttrsParams {
   enableVideo: number
   enableAudio: number
   grantBoard: number
-  coVideo: number
+  coVideo?: number
 }
 
 const PREFIX: string = process.env.REACT_APP_AGORA_EDU_ENDPOINT_PREFIX as string;
@@ -79,7 +79,7 @@ export class AgoraEduApi {
   appID: string = '';
   authorization: string = '';
   roomId: string = '';
-  userToken: string = '';
+  public userToken: string = '';
   recordId: string = '';
 
   // app config
@@ -138,10 +138,6 @@ export class AgoraEduApi {
   // 更新课程状态
   async updateCourse(params: Partial<RoomParams>) {
     const {room} = params
-    // const dataParams: any = {}
-    // if (room) {
-    //   dataParams.room = room
-    // }
     let data = await AgoraFetchJson({
       url: `/v1/apps/${this.appID}/room/${this.roomId}`,
       method: 'POST',
@@ -154,27 +150,8 @@ export class AgoraEduApi {
     }
   }
 
-  // 即将废弃, 需要更改为@next
-  // async updateRoomUser(params: Partial<RoomParams>) {
-  //   const {user} = params
-  //   const dataParams: any = {}
-  //   if (user) {
-  //     dataParams.users = [user]
-  //   }
-  //   let data = await AgoraFetchJson({
-  //     url: `/v1/apps/${this.appID}/room/${this.roomId}`,
-  //     method: 'POST',
-  //     data: dataParams,
-  //     token: this.userToken,
-  //     authorization: this.authorization
-  //   });
-  //   return {
-  //     data,
-  //   }
-  // }
-
   // @next
-  // update users 
+  // updateRoomUser
   // 更新用户状态，老师可更新房间内所有人，学生只能更新自己
   async updateRoomUser(user: Partial<UserAttrsParams>) {
     const {userId, ...userAttrs} = user
@@ -252,11 +229,11 @@ export class AgoraEduApi {
     }
   }
 
-  // getUsersState
+  // getRoomState
   // 获取用户状态
-  async getRoomState(roomId: string): Promise<{usersMap: Map<string, AgoraUser>, room: Partial<ClassState>}> {
+  async getRoomState(roomId: string): Promise<{usersMap: Map<string, AgoraUser>, room: Partial<ClassState>, me: Partial<Me>}> {
     const {data} = await this.getRoomInfoBy(roomId)
-    const {users: rawUsers, room: rawCourse} = data
+    const {users: rawUsers, room: rawCourse, user: me} = data
 
     let usersMap: Map<string, AgoraUser> = rawUsers.reduce((acc: Map<string, AgoraUser>, it: any) => {
       return acc.set(`${it.uid}`, {
@@ -269,7 +246,6 @@ export class AgoraEduApi {
         grantBoard: it.grantBoard,
         userId: it.userId,
         screenId: it.screenId,
-        coVideo: it.coVideo,
       });
     }, Map<string, AgoraUser>());
 
@@ -288,10 +264,15 @@ export class AgoraEduApi {
     if (teacher) {
       room.teacherId = teacher.uid
     }
+    
+    if (me.role === 1) {
+      room.teacherId = me.uid
+    }
 
     return {
       usersMap,
-      room
+      room,
+      me
     }
   }
 
@@ -355,7 +336,7 @@ export class AgoraEduApi {
       boardId: room.boardId,
       boardToken: room.boardToken,
       lockBoard: room.lockBoard,
-      teacherId: undefined
+      teacherId: 0
     }
 
     if (teacherState) {
@@ -380,6 +361,41 @@ export class AgoraEduApi {
       onlineUsers: room.onlineUsers,
     }
 
+    return result
+  }
+
+  async getCourseRecordBy(recordId: string, roomId: string, token: string) {
+    if (!this.appID) {
+      let {appId, authorization} = await this.config()
+      this.appID = appId
+      this.authorization = authorization
+    }
+    this.userToken = token
+    let data = await AgoraFetchJson({
+      url: `/v1/apps/${this.appID}/room/${roomId}/record/${recordId}`,
+      method: 'GET',
+      token: this.userToken,
+      authorization: this.authorization,
+    });
+    const teacherRecord = data.recordDetails.find((it:any) => it.role === 1)
+
+    const recordStatus = [
+      'recording',
+      'finished',
+      'finished_recording_to_be_download',
+      'finished_download_to_be_convert',
+      'finished_convert_to_be_upload'
+    ]
+
+    const result = {
+      boardId: data.boardId,
+      boardToken: data.boardToken,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      url: teacherRecord?.url,
+      status: data.status,
+      statusText: recordStatus[data.status],
+    }
     return result
   }
 }

@@ -194,17 +194,20 @@ export default function useStream () {
       const peerUid = coVideoUid;
       const peerUserAttr = roomState.users.get(`${peerUid}`);
       if (peerUid && peerUserAttr) {
+        let tmpStream = {
+          account: peerUserAttr.account,
+          video: peerUserAttr.video,
+          audio: peerUserAttr.audio,
+          streamID: +peerUid,
+        }
         const remoteStream = roomState.rtc.remoteStreams.get(`${peerUid}`);
         if (remoteStream) {
-          let _tmpStream = {
-            ...remoteStream,
-            account: peerUserAttr.account,
-            video: peerUserAttr.video,
-            audio: peerUserAttr.audio,
-            streamID: +peerUid,
+          tmpStream = {
+            ...tmpStream,
+            ...remoteStream
           }
-          return _tmpStream;
         }
+        return tmpStream
       }
     }
     return null;
@@ -212,6 +215,7 @@ export default function useStream () {
     course.coVideoUids,
     me.uid,
     // me.role,
+    roomState.users,
     roomState.rtc.remoteStreams,
     roomState.rtc.localStream,
   ]);
